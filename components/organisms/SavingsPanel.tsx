@@ -1,0 +1,161 @@
+'use client';
+
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import Button from '@/components/atoms/Button';
+import Card from '@/components/atoms/Card';
+import Input from '@/components/atoms/Input';
+import SectionTitle from '@/components/atoms/SectionTitle';
+import FormField from '@/components/molecules/FormField';
+import { useClientData } from '@/contexts/ClientDataContext';
+import { useI18n } from '@/contexts/I18nContext';
+import { formatCurrency } from '@/lib/format';
+import type { TranslationKey } from '@/lib/i18n';
+
+const amountSchema = z.object({
+  amount: z.coerce.number().gt(0, 'form.error.required'),
+});
+
+type AmountFormValues = z.infer<typeof amountSchema>;
+
+export default function SavingsPanel() {
+  const { state, openSavings, depositSavings, withdrawSavings } = useClientData();
+  const { t, language } = useI18n();
+
+  const openForm = useForm<AmountFormValues>({
+    resolver: zodResolver(amountSchema),
+    defaultValues: { amount: 500 },
+  });
+
+  const depositForm = useForm<AmountFormValues>({
+    resolver: zodResolver(amountSchema),
+    defaultValues: { amount: 200 },
+  });
+
+  const withdrawForm = useForm<AmountFormValues>({
+    resolver: zodResolver(amountSchema),
+    defaultValues: { amount: 100 },
+  });
+
+  const savingsAccount = state.accounts.find((account) => account.id === state.savingsAccount?.accountId);
+
+  const projectBalance = savingsAccount
+    ? savingsAccount.balance * Math.pow(1 + state.savingsRate, 30)
+    : 0;
+
+  return (
+    <div className="flex flex-col gap-10">
+      <SectionTitle title={t('savings.title')} subtitle={t('savings.subtitle')} />
+      {!savingsAccount ? (
+        <Card className="max-w-xl">
+          <p className="mb-4 text-sm text-zinc-600">{t('savings.noAccount')}</p>
+          <form
+            onSubmit={openForm.handleSubmit((values: AmountFormValues) => {
+              openSavings({ amount: values.amount });
+            })}
+            className="flex flex-col gap-4"
+          >
+            <FormField label={t('savings.amount.label')} htmlFor="savings-open-amount">
+              <Input
+                id="savings-open-amount"
+                type="number"
+                step="0.01"
+                placeholder={t('savings.amount.placeholder')}
+                {...openForm.register('amount', { valueAsNumber: true })}
+                hasError={Boolean(openForm.formState.errors.amount)}
+              />
+              {openForm.formState.errors.amount ? (
+                <p className="text-xs text-red-500">
+                  {t((openForm.formState.errors.amount.message as TranslationKey | undefined) ?? 'form.error.required')}
+                </p>
+              ) : null}
+            </FormField>
+            <Button type="submit">{t('savings.submit')}</Button>
+          </form>
+        </Card>
+      ) : (
+        <div className="grid gap-8 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <div className="flex flex-col gap-6">
+              <div>
+                <h3 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{t('savings.balance')}</h3>
+                <p className="text-4xl font-semibold text-emerald-700 dark:text-emerald-400">
+                  {formatCurrency(savingsAccount.balance, language)}
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl bg-emerald-50/60 p-4 dark:bg-emerald-900/30">
+                  <p className="text-sm text-emerald-700 dark:text-emerald-300">{t('savings.currentRate')}</p>
+                  <p className="text-2xl font-semibold text-emerald-900 dark:text-emerald-200">
+                    {t('savings.ratePerDay', { value: (state.savingsRate * 100).toFixed(2) })}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-emerald-50/40 p-4">
+                  <p className="text-sm text-emerald-700">{t('savings.projection')}</p>
+                  <p className="text-2xl font-semibold text-emerald-900">
+                    {formatCurrency(projectBalance, language)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+          <div className="space-y-6">
+            <Card>
+              <h3 className="mb-4 text-base font-semibold text-zinc-900 dark:text-zinc-100">{t('savings.depositTitle')}</h3>
+              <form
+                onSubmit={depositForm.handleSubmit((values: AmountFormValues) => {
+                  depositSavings({ amount: values.amount });
+                  depositForm.reset();
+                })}
+                className="flex flex-col gap-4"
+              >
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder={t('savings.amount.placeholder')}
+                  {...depositForm.register('amount', { valueAsNumber: true })}
+                  hasError={Boolean(depositForm.formState.errors.amount)}
+                />
+                {depositForm.formState.errors.amount ? (
+                  <p className="text-xs text-red-500">
+                    {t((depositForm.formState.errors.amount.message as TranslationKey | undefined) ?? 'form.error.required')}
+                  </p>
+                ) : null}
+                <Button type="submit" size="sm">
+                  {t('savings.deposit')}
+                </Button>
+              </form>
+            </Card>
+            <Card>
+              <h3 className="mb-4 text-base font-semibold text-zinc-900 dark:text-zinc-100">{t('savings.withdrawTitle')}</h3>
+              <form
+                onSubmit={withdrawForm.handleSubmit((values: AmountFormValues) => {
+                  withdrawSavings({ amount: values.amount });
+                  withdrawForm.reset();
+                })}
+                className="flex flex-col gap-4"
+              >
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder={t('savings.amount.placeholder')}
+                  {...withdrawForm.register('amount', { valueAsNumber: true })}
+                  hasError={Boolean(withdrawForm.formState.errors.amount)}
+                />
+                {withdrawForm.formState.errors.amount ? (
+                  <p className="text-xs text-red-500">
+                    {t((withdrawForm.formState.errors.amount.message as TranslationKey | undefined) ?? 'form.error.required')}
+                  </p>
+                ) : null}
+                <Button type="submit" size="sm" variant="secondary">
+                  {t('savings.withdraw')}
+                </Button>
+              </form>
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
