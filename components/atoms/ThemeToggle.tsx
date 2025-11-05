@@ -5,26 +5,25 @@ import { Moon, Sun } from 'lucide-react';
 
 type Theme = 'light' | 'dark';
 
-function getInitialTheme(): Theme {
-  if (typeof window === 'undefined') {
-    return 'light';
-  }
-
+function resolveThemeFromEnvironment(): Theme {
   try {
-    const stored = localStorage.getItem('theme');
+    if (typeof window === 'undefined') {
+      return 'light';
+    }
+
+    const stored = window.localStorage.getItem('theme');
     if (stored === 'light' || stored === 'dark') {
       return stored;
     }
+
+    if (document.documentElement.classList.contains('dark')) {
+      return 'dark';
+    }
+
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   } catch {
-    // Ignore storage access errors (private mode, etc.)
+    return 'light';
   }
-
-  if (document.documentElement.classList.contains('dark')) {
-    return 'dark';
-  }
-
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  return prefersDark ? 'dark' : 'light';
 }
 
 function applyTheme(theme: Theme) {
@@ -41,19 +40,32 @@ function applyTheme(theme: Theme) {
 }
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [theme, setTheme] = useState<Theme>('light');
+  const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
+    const detectedTheme = resolveThemeFromEnvironment();
+    setTheme(detectedTheme);
+    applyTheme(detectedTheme);
+    setResolved(true);
+  }, []);
+
+  useEffect(() => {
+    if (!resolved) {
+      return;
+    }
+
     applyTheme(theme);
+
     try {
-      localStorage.setItem('theme', theme);
+      window.localStorage.setItem('theme', theme);
     } catch {
       // Ignore storage access errors
     }
-  }, [theme]);
+  }, [resolved, theme]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (!resolved || typeof window === 'undefined') {
       return;
     }
 
@@ -65,20 +77,35 @@ export default function ThemeToggle() {
 
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+  }, [resolved]);
 
   const toggleTheme = useCallback(() => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+    setTheme((previous) => {
+      const nextTheme = previous === 'light' ? 'dark' : 'light';
+      applyTheme(nextTheme);
+      try {
+        window.localStorage.setItem('theme', nextTheme);
+      } catch {
+        // Ignore storage access errors
+      }
+      return nextTheme;
+    });
   }, []);
+
+  const label = theme === 'light' ? 'Activer le mode sombre' : 'Activer le mode clair';
+  const title = theme === 'light' ? 'Mode sombre' : 'Mode clair';
+  const icon = theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />;
 
   return (
     <button
+      type="button"
       onClick={toggleTheme}
       className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 transition-all hover:bg-zinc-50 hover:text-emerald-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-emerald-400"
-      aria-label={theme === 'light' ? 'Activer le mode sombre' : 'Activer le mode clair'}
-      title={theme === 'light' ? 'Mode sombre' : 'Mode clair'}
+      aria-label={label}
+      title={title}
+      data-theme-ready={resolved ? 'true' : 'false'}
     >
-      {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+      {resolved ? icon : <Moon className="h-5 w-5" />}
     </button>
   );
 }
