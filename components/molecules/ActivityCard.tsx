@@ -11,12 +11,12 @@ export default function ActivityCard({ title, description, timestamp, actionLabe
   return (
     <Card className="flex h-full flex-col justify-between gap-4">
       <div className="flex flex-col gap-2">
-        <p className="text-xs uppercase tracking-wider text-emerald-500 dark:text-emerald-400">{timestamp}</p>
-        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h3>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{description}</p>
+        <p className="text-xs uppercase tracking-[0.4em] text-white/50">{timestamp}</p>
+        <h3 className="text-lg font-semibold text-white">{title}</h3>
+        <p className="text-sm text-white/70">{description}</p>
       </div>
       <div>
-        <button className="text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300">{actionLabel}</button>
+        <button className="text-sm font-semibold text-white transition-opacity hover:opacity-70">{actionLabel}</button>
       </div>
     </Card>
   );

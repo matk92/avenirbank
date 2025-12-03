@@ -20,6 +20,7 @@ import type {
 
 const SAVINGS_DAILY_RATE = 0.0008;
 const FLAT_ORDER_FEE = 1;
+const FIXED_BASE_TIMESTAMP = Date.UTC(2024, 4, 12, 9, 30, 0);
 
 function createId(prefix: string): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -134,7 +135,7 @@ function createOrderRecord(payload: PlaceOrderPayload): InvestmentOrder {
 }
 
 function createInitialState(): ClientDataState {
-  const baseTimestamp = Date.now();
+  const baseTimestamp = FIXED_BASE_TIMESTAMP;
   const primaryAccount: Account = {
     id: 'acc-main',
     name: 'Compte courant Avenir',

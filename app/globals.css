@@ -1,29 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafafa;
-  --foreground: #09090b;
-  --primary: #10b981;
-  --primary-dark: #059669;
-  --card: #ffffff;
-  --card-border: #e5e7eb;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
+  --background: #05010d;
+  --background-secondary: #0d0d18;
+  --foreground: #f6f7fb;
+  --muted-foreground: #98a2c3;
+  --primary: #7a5cff;
+  --primary-accent: #a855f7;
+  --primary-contrast: #4f46e5;
+  --glass-bg: rgba(13, 13, 24, 0.75);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --card-highlight: rgba(255, 255, 255, 0.15);
+  --success: #40f3c0;
+  --danger: #ff4f70;
 }
 
 .dark {
-  --background: #18181b;
-  --foreground: #fafafa;
-  --primary: #34d399;
-  --primary-dark: #10b981;
-  --card: #27272a;
-  --card-border: #3f3f46;
-  --muted: #3f3f46;
-  --muted-foreground: #d4d4d8;
+  --background: #05010d;
+  --background-secondary: #0d0d18;
+  --foreground: #f6f7fb;
+  --muted-foreground: #98a2c3;
+  --primary: #7a5cff;
+  --primary-accent: #a855f7;
+  --primary-contrast: #4f46e5;
+  --glass-bg: rgba(13, 13, 24, 0.75);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --card-highlight: rgba(255, 255, 255, 0.15);
+  --success: #40f3c0;
+  --danger: #ff4f70;
 }
 
 body {
-  background: var(--background);
+  background: radial-gradient(circle at top, rgba(126, 92, 255, 0.35), transparent 55%), var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), "Segoe UI", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -32,4 +40,87 @@ body {
 
 * {
   scroll-behavior: smooth;
+}
+
+.revolut-gradient {
+  position: absolute;
+  inset: -40% auto auto -25%;
+  width: 1200px;
+  height: 1200px;
+  background: radial-gradient(circle at 20% 20%, rgba(120, 92, 255, 0.55), transparent 55%),
+    radial-gradient(circle at 80% 0%, rgba(73, 109, 255, 0.45), transparent 50%),
+    radial-gradient(circle at 60% 70%, rgba(4, 211, 164, 0.3), transparent 50%);
+  filter: blur(80px);
+  opacity: 0.9;
+  animation: revolveFloat 14s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.grid-noise {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(transparent 96%, rgba(255, 255, 255, 0.08) 100%);
+  background-size: 100% 24px;
+  opacity: 0.4;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 25px 60px rgba(5, 1, 13, 0.45);
+  backdrop-filter: blur(22px);
+}
+
+.text-success {
+  color: var(--success);
+}
+
+.bg-success-soft {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+}
+
+.border-success-soft {
+  border-color: color-mix(in srgb, var(--success) 25%, transparent);
+}
+
+.phone-frame {
+  border-radius: 36px;
+  padding: 20px 16px 26px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(5, 1, 13, 0.65) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 20px 60px rgba(5, 1, 13, 0.6);
+}
+
+.phone-notch {
+  width: 160px;
+  height: 32px;
+  margin: 0 auto 18px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.9);
+}
+
+@keyframes revolveFloat {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(40px, 20px, 0) scale(1.05);
+  }
+  100% {
+    transform: translate3d(-20px, -30px, 0) scale(0.98);
+  }
+}
+
+@keyframes pulseBorder {
+  0% {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  50% {
+    border-color: rgba(255, 255, 255, 0.35);
+  }
+  100% {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
 }

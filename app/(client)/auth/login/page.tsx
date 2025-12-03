@@ -2,16 +2,16 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { LogIn, Mail, Lock } from 'lucide-react';
+import { Mail, Lock, ArrowRight } from 'lucide-react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Button from '@/components/atoms/Button';
-import Card from '@/components/atoms/Card';
 import Input from '@/components/atoms/Input';
 import FormField from '@/components/molecules/FormField';
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
 import ThemeToggle from '@/components/atoms/ThemeToggle';
+import Beams from '@/components/Beams';
 import { useI18n } from '@/contexts/I18nContext';
 import type { TranslationKey } from '@/lib/i18n';
 
@@ -37,40 +37,50 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-zinc-50 to-white px-4 py-16 dark:from-zinc-950 dark:to-zinc-900">
-      <div className="w-full max-w-md space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-200/50">
-              <LogIn className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{t('auth.loginTitle')}</h1>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">Avenir Bank</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <LanguageSwitcher />
-          </div>
-        </div>
+    <div className="relative min-h-screen bg-black text-white">
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <Beams
+          beamWidth={3}
+          beamHeight={24}
+          beamNumber={10}
+          lightColor="#c0c0c0"
+          speed={1.35}
+          noiseIntensity={1.4}
+          scale={0.3}
+          rotation={-12}
+        />
+      </div>
+      <div className="pointer-events-none fixed inset-0 z-0 bg-linear-to-b from-[#1f1f1f]/80 via-[#2a2a2a]/50 to-black/70" />
 
-        <Card>
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-2xl items-center px-6 py-16">
+        <section className="w-full rounded-4xl border border-white/15 bg-black/55 p-8 backdrop-blur-3xl">
+          <div className="mb-8 flex items-start justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-white/50">Avenir</p>
+              <h2 className="text-2xl font-semibold">{t('auth.loginTitle')}</h2>
+              <p className="text-sm text-white/60">{t('home.heroSubtitle')}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <LanguageSwitcher />
+            </div>
+          </div>
+
           <form onSubmit={submit} className="flex flex-col gap-5">
             <FormField label={t('auth.email.label')} htmlFor="login-email">
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                 <Input
                   id="login-email"
                   type="email"
                   placeholder={t('auth.email.placeholder')}
-                  className="pl-10"
+                  className="pl-12"
                   {...form.register('email')}
                   hasError={Boolean(form.formState.errors.email)}
                 />
               </div>
               {form.formState.errors.email ? (
-                <p className="text-xs text-red-500">
+                <p className="text-xs text-[#ff4f70]">
                   {t((form.formState.errors.email.message as TranslationKey | undefined) ?? 'form.error.email')}
                 </p>
               ) : null}
@@ -78,41 +88,49 @@ export default function LoginPage() {
 
             <FormField label={t('auth.password.label')} htmlFor="login-password">
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
                 <Input
                   id="login-password"
                   type="password"
                   placeholder={t('auth.password.placeholder')}
-                  className="pl-10"
+                  className="pl-12"
                   {...form.register('password')}
                   hasError={Boolean(form.formState.errors.password)}
                 />
               </div>
               {form.formState.errors.password ? (
-                <p className="text-xs text-red-500">
+                <p className="text-xs text-[#ff4f70]">
                   {t((form.formState.errors.password.message as TranslationKey | undefined) ?? 'form.error.required')}
                 </p>
               ) : null}
             </FormField>
 
-            <Button type="submit" className="w-full">
-              <LogIn className="h-4 w-4" />
+            <div className="flex items-center justify-between text-sm text-white/60">
+              <span>{t('auth.switchToLogin')}</span>
+              <Link href="/auth/forgot-password" className="text-white transition hover:text-[#a855f7]">
+                Mot de passe oublié ?
+              </Link>
+            </div>
+
+            <Button type="submit" className="mt-2 w-full gap-2">
               {t('auth.login.cta')}
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </form>
+
           {success ? (
-            <div className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+            <div className="mt-5 rounded-2xl border border-[#40f3c0]/30 bg-[#40f3c0]/10 p-3 text-center text-sm text-[#40f3c0]">
               {success}
             </div>
           ) : null}
-        </Card>
 
-        <p className="text-center text-sm text-zinc-600 dark:text-zinc-400">
-          {t('auth.switchToRegister')}{" "}
-          <Link href="/auth/register" className="font-semibold text-emerald-600 hover:text-emerald-700 hover:underline">
-            {t('auth.registerTitle')}
-          </Link>
-        </p>
+          <p className="mt-8 text-center text-sm text-white/60">
+            {t('auth.switchToRegister')}{' '}
+            <Link href="/auth/register" className="font-semibold text-white transition hover:text-[#a855f7]">
+              {t('auth.registerTitle')}
+            </Link>
+          </p>
+        </section>
       </div>
     </div>
   );

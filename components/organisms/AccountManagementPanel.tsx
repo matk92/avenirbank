@@ -112,58 +112,156 @@ export default function AccountManagementPanel() {
 
   return (
     <div className="flex flex-col gap-12">
-      <section>
-        <SectionTitle title={t('accounts.createTitle')} subtitle={t('accounts.subtitle')} />
-        <Card>
-          <form onSubmit={handleCreateAccount} className="grid gap-6 md:grid-cols-3">
-            <FormField label={t('accounts.name.label')} htmlFor="account-name">
-              <Input
-                id="account-name"
-                placeholder={t('accounts.name.placeholder')}
-                {...createAccountForm.register('name')}
-                hasError={Boolean(createAccountForm.formState.errors.name)}
-              />
-              {createAccountForm.formState.errors.name ? (
-                <p className="text-xs text-red-500">
-                  {t(
-                    (createAccountForm.formState.errors.name.message as TranslationKey | undefined) ??
-                      'form.error.required',
-                  )}
-                </p>
-              ) : null}
-            </FormField>
-            <FormField label={t('accounts.type.label')} htmlFor="account-type">
-              <Select
-                id="account-type"
-                {...createAccountForm.register('type')}
-                hasError={Boolean(createAccountForm.formState.errors.type)}
-              >
-                <option value="checking">{t('accounts.type.checking')}</option>
-                <option value="savings">{t('accounts.type.savings')}</option>
-              </Select>
-            </FormField>
-            <FormField label={t('accounts.initialDeposit.label')} htmlFor="account-initial-deposit">
-              <Input
-                id="account-initial-deposit"
-                type="number"
-                step="0.01"
-                {...createAccountForm.register('initialDeposit', { valueAsNumber: true })}
-                hasError={Boolean(createAccountForm.formState.errors.initialDeposit)}
-              />
-              {createAccountForm.formState.errors.initialDeposit ? (
-                <p className="text-xs text-red-500">
-                  {t(
-                    (createAccountForm.formState.errors.initialDeposit.message as TranslationKey | undefined) ??
-                      'form.error.required',
-                  )}
-                </p>
-              ) : null}
-            </FormField>
-            <div className="md:col-span-3">
-              <Button type="submit">{t('accounts.submit')}</Button>
-            </div>
-          </form>
-        </Card>
+      <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+        <div>
+          <SectionTitle title={t('accounts.createTitle')} subtitle={t('accounts.subtitle')} />
+          <Card className="relative overflow-hidden">
+            <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[#6c5cff]/30 blur-3xl" />
+            <form onSubmit={handleCreateAccount} className="grid gap-6 md:grid-cols-2">
+              <FormField label={t('accounts.name.label')} htmlFor="account-name">
+                <Input
+                  id="account-name"
+                  placeholder={t('accounts.name.placeholder')}
+                  {...createAccountForm.register('name')}
+                  hasError={Boolean(createAccountForm.formState.errors.name)}
+                />
+                {createAccountForm.formState.errors.name ? (
+                  <p className="text-xs text-[#ff4f70]">
+                    {t(
+                      (createAccountForm.formState.errors.name.message as TranslationKey | undefined) ??
+                        'form.error.required',
+                    )}
+                  </p>
+                ) : null}
+              </FormField>
+              <FormField label={t('accounts.type.label')} htmlFor="account-type">
+                <Select
+                  id="account-type"
+                  {...createAccountForm.register('type')}
+                  hasError={Boolean(createAccountForm.formState.errors.type)}
+                >
+                  <option value="checking">{t('accounts.type.checking')}</option>
+                  <option value="savings">{t('accounts.type.savings')}</option>
+                </Select>
+              </FormField>
+              <div className="md:col-span-2">
+                <FormField label={t('accounts.initialDeposit.label')} htmlFor="account-initial-deposit">
+                  <Input
+                    id="account-initial-deposit"
+                    type="number"
+                    step="0.01"
+                    {...createAccountForm.register('initialDeposit', { valueAsNumber: true })}
+                    hasError={Boolean(createAccountForm.formState.errors.initialDeposit)}
+                  />
+                  {createAccountForm.formState.errors.initialDeposit ? (
+                    <p className="text-xs text-[#ff4f70]">
+                      {t(
+                        (createAccountForm.formState.errors.initialDeposit.message as TranslationKey | undefined) ??
+                          'form.error.required',
+                      )}
+                    </p>
+                  ) : null}
+                </FormField>
+              </div>
+              <div className="md:col-span-2">
+                <Button type="submit" className="w-full">
+                  {t('accounts.submit')}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+        <div>
+          <SectionTitle title={t('accounts.transferTitle')} />
+          <Card>
+            <form onSubmit={handleTransfer} className="grid gap-5">
+              <FormField label={t('accounts.transfer.from')} htmlFor="transfer-from">
+                <Select
+                  id="transfer-from"
+                  {...transferForm.register('fromAccountId')}
+                  hasError={Boolean(transferForm.formState.errors.fromAccountId)}
+                >
+                  <option value="" disabled>
+                    --
+                  </option>
+                  {activeAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </Select>
+                {transferForm.formState.errors.fromAccountId ? (
+                  <p className="text-xs text-[#ff4f70]">
+                    {t(
+                      (transferForm.formState.errors.fromAccountId.message as TranslationKey | undefined) ??
+                        'form.error.required',
+                    )}
+                  </p>
+                ) : null}
+              </FormField>
+              <FormField label={t('accounts.transfer.to')} htmlFor="transfer-to">
+                <Select
+                  id="transfer-to"
+                  {...transferForm.register('toAccountId')}
+                  hasError={Boolean(transferForm.formState.errors.toAccountId)}
+                >
+                  <option value="" disabled>
+                    --
+                  </option>
+                  {activeAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </Select>
+                {transferForm.formState.errors.toAccountId ? (
+                  <p className="text-xs text-[#ff4f70]">
+                    {t(
+                      (transferForm.formState.errors.toAccountId.message as TranslationKey | undefined) ??
+                        'form.error.required',
+                    )}
+                  </p>
+                ) : null}
+              </FormField>
+              <FormField label={t('accounts.transfer.amount')} htmlFor="transfer-amount">
+                <Input
+                  id="transfer-amount"
+                  type="number"
+                  step="0.01"
+                  {...transferForm.register('amount', { valueAsNumber: true })}
+                  hasError={Boolean(transferForm.formState.errors.amount)}
+                />
+                {transferForm.formState.errors.amount ? (
+                  <p className="text-xs text-[#ff4f70]">
+                    {t(
+                      (transferForm.formState.errors.amount.message as TranslationKey | undefined) ??
+                        'form.error.required',
+                    )}
+                  </p>
+                ) : null}
+              </FormField>
+              <FormField label={t('accounts.transfer.reference')} htmlFor="transfer-reference">
+                <Input
+                  id="transfer-reference"
+                  placeholder="Référence"
+                  {...transferForm.register('reference')}
+                  hasError={Boolean(transferForm.formState.errors.reference)}
+                />
+                {transferForm.formState.errors.reference ? (
+                  <p className="text-xs text-[#ff4f70]">
+                    {t(
+                      (transferForm.formState.errors.reference.message as TranslationKey | undefined) ??
+                        'form.error.required',
+                    )}
+                  </p>
+                ) : null}
+              </FormField>
+              <Button type="submit" variant="secondary">
+                {t('accounts.transfer.submit')}
+              </Button>
+            </form>
+          </Card>
+        </div>
       </section>
 
       <section>
@@ -201,7 +299,7 @@ export default function AccountManagementPanel() {
                         hasError={Boolean(renameForm.formState.errors.name)}
                       />
                       {renameForm.formState.errors.name ? (
-                        <p className="text-xs text-red-500">
+                        <p className="text-xs text-[#ff4f70]">
                           {t(
                             (renameForm.formState.errors.name.message as TranslationKey | undefined) ??
                               'form.error.required',
@@ -223,98 +321,6 @@ export default function AccountManagementPanel() {
             </div>
           ))}
         </div>
-      </section>
-
-      <section>
-        <SectionTitle title={t('accounts.transferTitle')} />
-        <Card>
-          <form onSubmit={handleTransfer} className="grid gap-6 md:grid-cols-2">
-            <FormField label={t('accounts.transfer.from')} htmlFor="transfer-from">
-              <Select
-                id="transfer-from"
-                {...transferForm.register('fromAccountId')}
-                hasError={Boolean(transferForm.formState.errors.fromAccountId)}
-              >
-                <option value="" disabled>
-                  --
-                </option>
-                {activeAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </Select>
-              {transferForm.formState.errors.fromAccountId ? (
-                <p className="text-xs text-red-500">
-                  {t(
-                    (transferForm.formState.errors.fromAccountId.message as TranslationKey | undefined) ??
-                      'form.error.required',
-                  )}
-                </p>
-              ) : null}
-            </FormField>
-            <FormField label={t('accounts.transfer.to')} htmlFor="transfer-to">
-              <Select
-                id="transfer-to"
-                {...transferForm.register('toAccountId')}
-                hasError={Boolean(transferForm.formState.errors.toAccountId)}
-              >
-                <option value="" disabled>
-                  --
-                </option>
-                {activeAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </Select>
-              {transferForm.formState.errors.toAccountId ? (
-                <p className="text-xs text-red-500">
-                  {t(
-                    (transferForm.formState.errors.toAccountId.message as TranslationKey | undefined) ??
-                      'form.error.required',
-                  )}
-                </p>
-              ) : null}
-            </FormField>
-            <FormField label={t('accounts.transfer.amount')} htmlFor="transfer-amount">
-              <Input
-                id="transfer-amount"
-                type="number"
-                step="0.01"
-                {...transferForm.register('amount', { valueAsNumber: true })}
-                hasError={Boolean(transferForm.formState.errors.amount)}
-              />
-              {transferForm.formState.errors.amount ? (
-                <p className="text-xs text-red-500">
-                  {t(
-                    (transferForm.formState.errors.amount.message as TranslationKey | undefined) ??
-                      'form.error.required',
-                  )}
-                </p>
-              ) : null}
-            </FormField>
-            <FormField label={t('accounts.transfer.reference')} htmlFor="transfer-reference">
-              <Input
-                id="transfer-reference"
-                placeholder="Référence"
-                {...transferForm.register('reference')}
-                hasError={Boolean(transferForm.formState.errors.reference)}
-              />
-              {transferForm.formState.errors.reference ? (
-                <p className="text-xs text-red-500">
-                  {t(
-                    (transferForm.formState.errors.reference.message as TranslationKey | undefined) ??
-                      'form.error.required',
-                  )}
-                </p>
-              ) : null}
-            </FormField>
-            <div className="md:col-span-2">
-              <Button type="submit">{t('accounts.transfer.submit')}</Button>
-            </div>
-          </form>
-        </Card>
       </section>
     </div>
   );

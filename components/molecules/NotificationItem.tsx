@@ -11,10 +11,14 @@ export type NotificationItemProps = {
 
 export default function NotificationItem({ message, createdAt, read, onMarkAsRead }: NotificationItemProps) {
   return (
-    <div className={`flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 ${read ? 'border-zinc-100 bg-white dark:border-zinc-700 dark:bg-zinc-800' : 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-700 dark:bg-emerald-900/30'}`}>
+    <div
+      className={`glass-panel flex items-start justify-between gap-4 rounded-2xl border px-4 py-3 ${
+        read ? 'opacity-70' : 'border-white/30'
+      }`}
+    >
       <div>
-        <p className="text-sm text-zinc-700 dark:text-zinc-200">{message}</p>
-        <p className="text-xs text-zinc-400 dark:text-zinc-500">{createdAt}</p>
+        <p className="text-sm text-white">{message}</p>
+        <p className="text-xs text-white/50">{createdAt}</p>
       </div>
       {!read && onMarkAsRead ? (
         <Button variant="ghost" size="sm" onClick={onMarkAsRead}>

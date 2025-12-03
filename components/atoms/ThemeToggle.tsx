@@ -40,11 +40,12 @@ function applyTheme(theme: Theme) {
 }
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>('dark');
   const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
     const detectedTheme = resolveThemeFromEnvironment();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- we need to capture the client-side theme after hydration
     setTheme(detectedTheme);
     applyTheme(detectedTheme);
     setResolved(true);
@@ -100,12 +101,12 @@ export default function ThemeToggle() {
     <button
       type="button"
       onClick={toggleTheme}
-      className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 transition-all hover:bg-zinc-50 hover:text-emerald-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-emerald-400"
+      className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition-all hover:border-white/30 hover:bg-white/10"
       aria-label={label}
       title={title}
       data-theme-ready={resolved ? 'true' : 'false'}
     >
-      {resolved ? icon : <Moon className="h-5 w-5" />}
+      {resolved ? icon : <Sun className="h-5 w-5" />}
     </button>
   );
 }

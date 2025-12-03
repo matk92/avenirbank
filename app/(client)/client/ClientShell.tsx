@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Wallet, PiggyBank, TrendingUp, Newspaper, MessageSquare } from 'lucide-react';
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
 import ThemeToggle from '@/components/atoms/ThemeToggle';
+import DarkVeil from '@/components/DarkVeil';
 import { useI18n } from '@/contexts/I18nContext';
 import type { TranslationKey } from '@/lib/i18n';
 import type { ReactNode } from 'react';
@@ -24,27 +25,32 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 	const { t, language } = useI18n();
 
 	return (
-		<div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-			<div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-				<header className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800 sm:flex-row sm:items-center sm:justify-between">
-					<div className="flex items-center gap-4">
-						<div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-200/50">
-							<svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-							</svg>
+		<div className="relative min-h-screen bg-(--background) text-white">
+			<div className="pointer-events-none fixed inset-0 z-0 h-screen w-screen opacity-90">
+				<DarkVeil hueShift={-25} noiseIntensity={0.05} scanlineIntensity={0} scanlineFrequency={0} warpAmount={0.15} speed={0.4} resolutionScale={0.75} />
+			</div>
+
+			<div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-0">
+				<header className="glass-panel rounded-3xl p-6 sm:p-8">
+					<div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+						<div className="flex items-center gap-4">
+							<div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-2xl font-semibold text-white">
+								R
+							</div>
+							<div>
+								<p className="text-xs uppercase tracking-[0.4em] text-white/50">Avenir</p>
+								<h1 className="text-2xl font-semibold">{t('clientPortal.title')}</h1>
+								<p className="text-sm text-white/60">{t('clientPortal.subtitle')}</p>
+							</div>
 						</div>
-						<div>
-							<p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Avenir Bank</p>
-							<h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{t('clientPortal.title')}</h1>
+						<div className="flex items-center gap-3">
+							<ThemeToggle />
+							<LanguageSwitcher />
 						</div>
-					</div>
-					<div className="flex items-center gap-3">
-						<ThemeToggle />
-						<LanguageSwitcher />
 					</div>
 				</header>
 
-				<nav className="flex flex-wrap gap-2">
+				<nav className="glass-panel flex flex-wrap gap-2 overflow-hidden rounded-3xl p-3 text-sm font-medium">
 					{navItems.map((item) => {
 						const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 						const Icon = item.icon;
@@ -52,24 +58,24 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 							<Link
 								key={item.href}
 								href={item.href}
-								className={`group flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
+								className={`group flex flex-1 items-center justify-center gap-2 rounded-2xl px-4 py-2 transition ${
 									active
-										? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200/50'
-										: 'bg-white text-zinc-700 hover:bg-zinc-100 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600'
+										? 'bg-white text-black shadow-[0_10px_30px_rgba(255,255,255,0.25)]'
+										: 'text-white/70 hover:bg-white/10'
 								}`}
 							>
-								<Icon className={`h-4 w-4 ${active ? '' : 'opacity-60 group-hover:opacity-100'}`} />
+								<Icon className={`h-4 w-4 ${active ? 'text-black' : 'text-white/60 group-hover:text-white'}`} />
 								<span>{t(item.labelKey)}</span>
 							</Link>
 						);
 					})}
 				</nav>
 
-				<main className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800 sm:p-8">
+				<main className="glass-panel rounded-3xl p-6 sm:p-8">
 					{children}
 				</main>
 
-				<footer className="pb-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
+				<footer className="pb-6 text-center text-xs text-white/50">
 					© {new Date().getFullYear()} Avenir Bank — {language === 'fr' ? 'Tous droits réservés' : 'All rights reserved'}
 				</footer>
 			</div>

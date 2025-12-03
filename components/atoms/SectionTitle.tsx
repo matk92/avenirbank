@@ -8,12 +8,14 @@ type SectionTitleProps = {
 
 export default function SectionTitle({ title, subtitle, action }: SectionTitleProps) {
   return (
-    <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 sm:text-xl">{title}</h2>
-        {subtitle ? <p className="text-sm text-zinc-600 dark:text-zinc-400 sm:text-base">{subtitle}</p> : null}
+    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-2">
+        {subtitle ? (
+          <p className="text-xs font-semibold uppercase tracking-[0.5em] text-white/50">{subtitle}</p>
+        ) : null}
+        <h2 className="text-2xl font-semibold text-white">{title}</h2>
       </div>
-      {action ? <div className="flex items-center gap-2">{action}</div> : null}
+      {action ? <div className="flex items-center gap-2 text-sm text-white/80">{action}</div> : null}
     </div>
   );
 }
