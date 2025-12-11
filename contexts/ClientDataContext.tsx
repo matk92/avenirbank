@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, useReducer, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { generateIban } from '@/lib/iban';
+import { accrueSavingsBalance, calculateOrderTotal } from '@/lib/finance';
 import type {
   Account,
   AccountStatus,
@@ -122,15 +123,44 @@ function createOperationRecord(payload: TransferPayload): Operation {
 }
 
 function createOrderRecord(payload: PlaceOrderPayload): InvestmentOrder {
+  const { fees } = calculateOrderTotal(payload.quantity, payload.limitPrice, FLAT_ORDER_FEE);
   return {
     id: createId('order'),
     side: payload.side,
     stockSymbol: payload.stockSymbol,
     quantity: payload.quantity,
     limitPrice: payload.limitPrice,
-    fees: FLAT_ORDER_FEE,
+    fees,
     status: 'pending',
     createdAt: new Date().toISOString(),
+  };
+}
+
+function accrueSavings(state: ClientDataState): ClientDataState {
+  if (!state.savingsAccount) {
+    return state;
+  }
+  const savings = state.accounts.find((account) => account.id === state.savingsAccount?.accountId);
+  if (!savings) {
+    return state;
+  }
+
+  const accrual = accrueSavingsBalance(savings.balance, state.savingsRate, state.savingsAccount.lastCapitalization);
+  if (accrual.interestEarned <= 0) {
+    return state;
+  }
+
+  const accounts = state.accounts.map((account) =>
+    account.id === savings.id ? { ...account, balance: accrual.balance } : account,
+  );
+
+  return {
+    ...state,
+    accounts,
+    savingsAccount: {
+      ...state.savingsAccount,
+      lastCapitalization: accrual.newCapitalizationDate,
+    },
   };
 }
 
@@ -158,6 +188,17 @@ function createInitialState(): ClientDataState {
     createdAt: new Date(baseTimestamp - 1000 * 60 * 60 * 24 * 45).toISOString(),
   };
 
+  const savingsAccountRecord: Account = {
+    id: 'acc-savings',
+    name: 'Épargne climat',
+    iban: generateIban(baseTimestamp + 87),
+    balance: 6200,
+    currency: 'EUR',
+    type: 'savings',
+    status: 'active',
+    createdAt: new Date(baseTimestamp - 1000 * 60 * 60 * 24 * 200).toISOString(),
+  };
+
   const operations: Operation[] = [
     {
       id: 'op-1',
@@ -174,6 +215,14 @@ function createInitialState(): ClientDataState {
       amount: 1200,
       reference: 'Salaire',
       executedAt: new Date(baseTimestamp - 1000 * 60 * 60 * 72).toISOString(),
+    },
+    {
+      id: 'op-3',
+      fromAccountId: primaryAccount.id,
+      toAccountId: savingsAccountRecord.id,
+      amount: 400,
+      reference: 'Versement épargne',
+      executedAt: new Date(baseTimestamp - 1000 * 60 * 60 * 14).toISOString(),
     },
   ];
 
@@ -217,6 +266,12 @@ function createInitialState(): ClientDataState {
       createdAt: new Date(baseTimestamp - 1000 * 60 * 60 * 5).toISOString(),
       read: true,
     },
+    {
+      id: 'notif-3',
+      message: 'Nouveau titre disponible : Solidarité Tech (SOL).',
+      createdAt: new Date(baseTimestamp - 1000 * 60 * 60 * 8).toISOString(),
+      read: false,
+    },
   ];
 
   const messages: Message[] = [
@@ -232,6 +287,35 @@ function createInitialState(): ClientDataState {
       content: 'Bonjour ! Le virement est bien parti, il sera crédité sous 24h.',
       createdAt: new Date(baseTimestamp - 1000 * 60 * 60 * 3.5).toISOString(),
     },
+    {
+      id: 'msg-3',
+      author: 'client',
+      content: 'Pouvez-vous me confirmer le taux actuel du livret ?',
+      createdAt: new Date(baseTimestamp - 1000 * 60 * 60 * 2.5).toISOString(),
+    },
+  ];
+
+  const investmentOrders: InvestmentOrder[] = [
+    {
+      id: 'order-1',
+      side: 'buy',
+      stockSymbol: 'AVA',
+      quantity: 25,
+      limitPrice: 42,
+      fees: FLAT_ORDER_FEE,
+      status: 'pending',
+      createdAt: new Date(baseTimestamp - 1000 * 60 * 40).toISOString(),
+    },
+    {
+      id: 'order-2',
+      side: 'sell',
+      stockSymbol: 'NEO',
+      quantity: 15,
+      limitPrice: 18.6,
+      fees: FLAT_ORDER_FEE,
+      status: 'executed',
+      createdAt: new Date(baseTimestamp - 1000 * 60 * 180).toISOString(),
+    },
   ];
 
   return {
@@ -241,10 +325,14 @@ function createInitialState(): ClientDataState {
       lastName: 'Martin',
       email: 'camille.martin@avenirbank.fr',
     },
-    accounts: [primaryAccount, sideAccount],
+    accounts: [primaryAccount, sideAccount, savingsAccountRecord],
     operations,
-    savingsAccount: null,
-    investmentOrders: [],
+    savingsAccount: {
+      accountId: savingsAccountRecord.id,
+      dailyRate: SAVINGS_DAILY_RATE,
+      lastCapitalization: new Date(baseTimestamp - 1000 * 60 * 60 * 24 * 1).toISOString(),
+    },
+    investmentOrders,
     stocks,
     activity,
     notifications,
@@ -330,26 +418,28 @@ function clientDataReducer(state: ClientDataState, action: ClientDataAction): Cl
       };
     }
     case 'SAVINGS_DEPOSIT': {
-      if (!state.savingsAccount) {
-        return state;
+      const accrued = accrueSavings(state);
+      if (!accrued.savingsAccount) {
+        return accrued;
       }
-      const accounts = state.accounts.map((account) =>
-        account.id === state.savingsAccount?.accountId
+      const accounts = accrued.accounts.map((account) =>
+        account.id === accrued.savingsAccount?.accountId
           ? { ...account, balance: account.balance + action.payload.amount }
           : account,
       );
-      return { ...state, accounts };
+      return { ...accrued, accounts };
     }
     case 'SAVINGS_WITHDRAW': {
-      if (!state.savingsAccount) {
-        return state;
+      const accrued = accrueSavings(state);
+      if (!accrued.savingsAccount) {
+        return accrued;
       }
-      const accounts = state.accounts.map((account) =>
-        account.id === state.savingsAccount?.accountId
+      const accounts = accrued.accounts.map((account) =>
+        account.id === accrued.savingsAccount?.accountId
           ? { ...account, balance: Math.max(0, account.balance - action.payload.amount) }
           : account,
       );
-      return { ...state, accounts };
+      return { ...accrued, accounts };
     }
     case 'PLACE_ORDER': {
       const order = createOrderRecord(action.payload);

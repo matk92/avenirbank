@@ -15,7 +15,14 @@ function SelectComponent(
   ref: ForwardedRef<HTMLSelectElement>,
 ) {
   const errorStyles = hasError ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : '';
-  return <select ref={ref} className={`${baseStyles} ${errorStyles} ${className}`.trim()} {...props} />;
+  return (
+    <select
+      ref={ref}
+      aria-invalid={hasError || undefined}
+      className={`${baseStyles} ${errorStyles} ${className}`.trim()}
+      {...props}
+    />
+  );
 }
 
 const Select = forwardRef<HTMLSelectElement, SelectProps>(SelectComponent);

@@ -57,6 +57,8 @@ export default function AccountManagementPanel() {
   const { state, createAccount, renameAccount, closeAccount, transfer } = useClientData();
   const { t, language } = useI18n();
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [dragSourceAccountId, setDragSourceAccountId] = useState<string | null>(null);
+  const [dragOverAccountId, setDragOverAccountId] = useState<string | null>(null);
 
   const createAccountForm = useForm<CreateAccountFormValues>({
     resolver: zodResolver(createAccountSchema),
@@ -102,6 +104,37 @@ export default function AccountManagementPanel() {
     });
     transferForm.reset();
   });
+
+  const handleDragStart = (accountId: string) => (event: React.DragEvent<HTMLDivElement>) => {
+    setDragSourceAccountId(accountId);
+    event.dataTransfer.setData('text/plain', accountId);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+  };
+
+  const handleDrop = (targetAccountId: string) => (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const sourceId = event.dataTransfer.getData('text/plain') || dragSourceAccountId;
+    if (!sourceId || sourceId === targetAccountId) {
+      return;
+    }
+    transferForm.setValue('fromAccountId', sourceId);
+    transferForm.setValue('toAccountId', targetAccountId);
+    setDragSourceAccountId(null);
+    setDragOverAccountId(null);
+  };
+
+  const handleDragEnter = (targetAccountId: string) => (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragOverAccountId(targetAccountId);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragOverAccountId(null);
+  };
 
   const formatBalance = (amount: number, locale: Language) => formatCurrency(amount, locale);
 
@@ -174,6 +207,11 @@ export default function AccountManagementPanel() {
         <div>
           <SectionTitle title={t('accounts.transferTitle')} />
           <Card>
+            <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+              {language === 'fr'
+                ? 'Astuce : glissez un compte sur un autre pour pré-remplir le virement.'
+                : 'Tip: drag one account onto another to prefill the transfer.'}
+            </p>
             <form onSubmit={handleTransfer} className="grid gap-5">
               <FormField label={t('accounts.transfer.from')} htmlFor="transfer-from">
                 <Select
@@ -268,7 +306,18 @@ export default function AccountManagementPanel() {
         <SectionTitle title={t('accounts.listTitle')} />
         <div className="grid gap-6 lg:grid-cols-2">
           {availableAccounts.map((account) => (
-            <div key={account.id} className="space-y-4">
+            <div
+              key={account.id}
+              className={`space-y-4 rounded-2xl transition outline-offset-4 ${
+                dragOverAccountId === account.id ? 'outline outline-2 outline-emerald-400/70' : ''
+              }`}
+              draggable
+              onDragStart={handleDragStart(account.id)}
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragEnter(account.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop(account.id)}
+            >
               <AccountSummaryCard
                 name={account.name}
                 iban={account.iban}

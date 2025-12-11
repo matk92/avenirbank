@@ -12,7 +12,14 @@ type InputProps = InputHTMLAttributes<HTMLInputElement> & {
 
 function InputComponent({ className = '', hasError = false, ...props }: InputProps, ref: ForwardedRef<HTMLInputElement>) {
   const errorStyles = hasError ? 'border-[#ff4f70] focus:border-[#ff4f70] focus:ring-[#ff4f70]/40' : '';
-  return <input ref={ref} className={`${baseStyles} ${errorStyles} ${className}`.trim()} {...props} />;
+  return (
+    <input
+      ref={ref}
+      aria-invalid={hasError || undefined}
+      className={`${baseStyles} ${errorStyles} ${className}`.trim()}
+      {...props}
+    />
+  );
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(InputComponent);

@@ -166,6 +166,7 @@ const baseTranslations = {
     "errors.404.message": "La page que vous cherchez n’existe pas ou a été déplacée.",
     "errors.500.title": "Une erreur est survenue",
     "errors.500.message": "Notre équipe est déjà sur le coup. Merci de réessayer plus tard.",
+    "errors.action.retry": "Réessayer",
     "errors.action.backHome": "Retour à l’accueil",
   },
   en: {
@@ -333,6 +334,7 @@ const baseTranslations = {
     "errors.404.message": "The page you are looking for does not exist or has moved.",
     "errors.500.title": "An error occurred",
     "errors.500.message": "Our team is already on it. Please try again later.",
+    "errors.action.retry": "Retry",
     "errors.action.backHome": "Back to home",
   },
 };

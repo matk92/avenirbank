@@ -10,6 +10,7 @@ import SectionTitle from '@/components/atoms/SectionTitle';
 import FormField from '@/components/molecules/FormField';
 import { useClientData } from '@/contexts/ClientDataContext';
 import { useI18n } from '@/contexts/I18nContext';
+import { projectSavingsBalance } from '@/lib/finance';
 import { formatCurrency } from '@/lib/format';
 import type { TranslationKey } from '@/lib/i18n';
 
@@ -40,9 +41,9 @@ export default function SavingsPanel() {
 
   const savingsAccount = state.accounts.find((account) => account.id === state.savingsAccount?.accountId);
 
-  const projectBalance = savingsAccount
-    ? savingsAccount.balance * Math.pow(1 + state.savingsRate, 30)
-    : 0;
+  const projection = savingsAccount
+    ? projectSavingsBalance(savingsAccount.balance, state.savingsRate, 30)
+    : { projectedBalance: 0, accruedInterest: 0, days: 30 };
 
   return (
     <div className="flex flex-col gap-10">
@@ -94,8 +95,9 @@ export default function SavingsPanel() {
                 <div className="rounded-2xl bg-emerald-50/40 p-4">
                   <p className="text-sm text-emerald-700">{t('savings.projection')}</p>
                   <p className="text-2xl font-semibold text-emerald-900">
-                    {formatCurrency(projectBalance, language)}
+                    {formatCurrency(projection.projectedBalance, language)}
                   </p>
+                  <p className="text-xs text-emerald-700">+{formatCurrency(projection.accruedInterest, language)} / 30 j</p>
                 </div>
               </div>
             </div>

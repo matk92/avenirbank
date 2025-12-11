@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-const baseUrl = 'https://avenirbank.example.com';
+const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://avenirbank.example.com').replace(/\/$/, '');
 
 const routes = [
   '/',

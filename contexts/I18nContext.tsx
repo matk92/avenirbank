@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { defaultLanguage, translations } from '@/lib/i18n';
 import type { Language, TranslationKey } from '@/lib/i18n';
@@ -17,6 +17,25 @@ const I18nContext = createContext<I18nContextValue | undefined>(undefined);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>(defaultLanguage);
+
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('language') : null;
+    if (stored === 'fr' || stored === 'en') {
+      setLanguage(stored);
+      return;
+    }
+    const browserLang = typeof navigator !== 'undefined' ? navigator.language.slice(0, 2) : defaultLanguage;
+    if (browserLang === 'fr' || browserLang === 'en') {
+      setLanguage(browserLang);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('language', language);
+      document.documentElement.lang = language;
+    }
+  }, [language]);
 
   const translate = useCallback(
     (key: TranslationKey, params?: TranslationParams) => {
