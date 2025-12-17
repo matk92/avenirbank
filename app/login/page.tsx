@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { LogIn, Mail, Lock } from 'lucide-react';
 import { z } from 'zod';
@@ -24,6 +25,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const { t } = useI18n();
+  const router = useRouter();
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -53,13 +55,30 @@ export default function LoginPage() {
       }
 
       const data = await response.json();
+      if (!data?.access_token) {
+        throw new Error('Token manquant dans la réponse');
+      }
+
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
+
+      // Middleware lit uniquement les cookies (pas le localStorage) -> on persiste le token en cookie aussi.
+      const cookieParts = [
+        `token=${encodeURIComponent(String(data.access_token))}`,
+        'Path=/',
+        'SameSite=Lax',
+        `Max-Age=${60 * 60 * 24 * 7}`,
+      ];
+      if (window.location.protocol === 'https:') {
+        cookieParts.push('Secure');
+      }
+      document.cookie = cookieParts.join('; ');
+
       setSuccess(t('form.success.generic'));
       
       // Redirect to dashboard after 1 second
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        router.replace('/client');
       }, 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

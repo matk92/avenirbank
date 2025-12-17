@@ -4,8 +4,8 @@ const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://avenirbank.example
 
 const routes = [
   '/',
-  '/auth/login',
-  '/auth/register',
+  '/login',
+  '/register',
   '/client',
   '/client/accounts',
   '/client/savings',
