@@ -1,13 +1,11 @@
-'use client';
-
 import Link from 'next/link';
 import { ArrowLeft, Compass } from 'lucide-react';
 import Button from '@/components/atoms/Button';
 import Card from '@/components/atoms/Card';
-import { useI18n } from '@/contexts/I18nContext';
+import { getServerT } from '@/lib/i18n-server';
 
-export default function NotFoundPage() {
-  const { t } = useI18n();
+export default async function NotFoundPage() {
+  const { t } = await getServerT();
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black text-white">

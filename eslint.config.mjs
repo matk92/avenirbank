@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Backend compiled files
+    "backend/dist/**",
+    "backend/webpack.config.js",
   ]),
 ]);
 

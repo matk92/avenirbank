@@ -52,7 +52,7 @@ export default function RegisterPage() {
     setSuccess(null);
 
     try {
-      const response = await fetch('http://localhost:3001/auth/register', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +70,7 @@ export default function RegisterPage() {
         throw new Error(errorData.message || 'Registration failed');
       }
 
-      const data = await response.json();
+      await response.json();
       setSuccess(t('form.success.generic'));
       
       // Redirect to login after 2 seconds

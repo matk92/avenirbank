@@ -10,6 +10,7 @@ import Input from '@/components/atoms/Input';
 import Select from '@/components/atoms/Select';
 import SectionTitle from '@/components/atoms/SectionTitle';
 import FormField from '@/components/molecules/FormField';
+import Modal from '@/components/molecules/Modal';
 import AccountSummaryCard from '@/components/molecules/AccountSummaryCard';
 import { useClientData } from '@/contexts/ClientDataContext';
 import { useI18n } from '@/contexts/I18nContext';
@@ -59,6 +60,7 @@ export default function AccountManagementPanel() {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [dragSourceAccountId, setDragSourceAccountId] = useState<string | null>(null);
   const [dragOverAccountId, setDragOverAccountId] = useState<string | null>(null);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   const createAccountForm = useForm<CreateAccountFormValues>({
     resolver: zodResolver(createAccountSchema),
@@ -103,6 +105,7 @@ export default function AccountManagementPanel() {
       reference: values.reference,
     });
     transferForm.reset();
+    setIsTransferModalOpen(false);
   });
 
   const handleDragStart = (accountId: string) => (event: React.DragEvent<HTMLDivElement>) => {
@@ -122,8 +125,13 @@ export default function AccountManagementPanel() {
     }
     transferForm.setValue('fromAccountId', sourceId);
     transferForm.setValue('toAccountId', targetAccountId);
+    transferForm.setValue('amount', 0);
+    transferForm.setValue('reference', '');
+    setIsTransferModalOpen(true);
     setDragSourceAccountId(null);
     setDragOverAccountId(null);
+    // Focus amount after the modal renders.
+    setTimeout(() => transferForm.setFocus('amount'), 0);
   };
 
   const handleDragEnter = (targetAccountId: string) => (event: React.DragEvent<HTMLDivElement>) => {
@@ -145,6 +153,120 @@ export default function AccountManagementPanel() {
 
   return (
     <div className="flex flex-col gap-12">
+      <Modal
+        open={isTransferModalOpen}
+        title={t('accounts.transferTitle')}
+        onClose={() => setIsTransferModalOpen(false)}
+      >
+        <Card className="border-white/15 bg-black/70 p-6">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-white/60">{t('accounts.transferTitle')}</p>
+              <p className="mt-1 text-sm text-white/70">
+                {language === 'fr'
+                  ? 'Renseignez le montant et le libellé, puis validez.'
+                  : 'Enter the amount and reference, then confirm.'}
+              </p>
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setIsTransferModalOpen(false)}>
+              {t('actions.cancel')}
+            </Button>
+          </div>
+
+          <form onSubmit={handleTransfer} className="grid gap-5">
+            <FormField label={t('accounts.transfer.from')} htmlFor="transfer-modal-from">
+              <Select
+                id="transfer-modal-from"
+                {...transferForm.register('fromAccountId')}
+                hasError={Boolean(transferForm.formState.errors.fromAccountId)}
+              >
+                <option value="" disabled>
+                  --
+                </option>
+                {activeAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </Select>
+              {transferForm.formState.errors.fromAccountId ? (
+                <p className="text-xs text-[#ff4f70]">
+                  {t(
+                    (transferForm.formState.errors.fromAccountId.message as TranslationKey | undefined) ??
+                      'form.error.required',
+                  )}
+                </p>
+              ) : null}
+            </FormField>
+
+            <FormField label={t('accounts.transfer.to')} htmlFor="transfer-modal-to">
+              <Select
+                id="transfer-modal-to"
+                {...transferForm.register('toAccountId')}
+                hasError={Boolean(transferForm.formState.errors.toAccountId)}
+              >
+                <option value="" disabled>
+                  --
+                </option>
+                {activeAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </Select>
+              {transferForm.formState.errors.toAccountId ? (
+                <p className="text-xs text-[#ff4f70]">
+                  {t(
+                    (transferForm.formState.errors.toAccountId.message as TranslationKey | undefined) ??
+                      'form.error.required',
+                  )}
+                </p>
+              ) : null}
+            </FormField>
+
+            <FormField label={t('accounts.transfer.amount')} htmlFor="transfer-modal-amount">
+              <Input
+                id="transfer-modal-amount"
+                type="number"
+                step="0.01"
+                {...transferForm.register('amount', { valueAsNumber: true })}
+                hasError={Boolean(transferForm.formState.errors.amount)}
+              />
+              {transferForm.formState.errors.amount ? (
+                <p className="text-xs text-[#ff4f70]">
+                  {t(
+                    (transferForm.formState.errors.amount.message as TranslationKey | undefined) ?? 'form.error.required',
+                  )}
+                </p>
+              ) : null}
+            </FormField>
+
+            <FormField label={t('accounts.transfer.reference')} htmlFor="transfer-modal-reference">
+              <Input
+                id="transfer-modal-reference"
+                placeholder={language === 'fr' ? 'Libellé' : 'Reference'}
+                {...transferForm.register('reference')}
+                hasError={Boolean(transferForm.formState.errors.reference)}
+              />
+              {transferForm.formState.errors.reference ? (
+                <p className="text-xs text-[#ff4f70]">
+                  {t(
+                    (transferForm.formState.errors.reference.message as TranslationKey | undefined) ?? 'form.error.required',
+                  )}
+                </p>
+              ) : null}
+            </FormField>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <Button type="button" variant="secondary" onClick={() => setIsTransferModalOpen(false)}>
+                {t('actions.cancel')}
+              </Button>
+              <Button type="submit">{t('accounts.transfer.submit')}</Button>
+            </div>
+          </form>
+        </Card>
+      </Modal>
+
       <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
         <div>
           <SectionTitle title={t('accounts.createTitle')} subtitle={t('accounts.subtitle')} />

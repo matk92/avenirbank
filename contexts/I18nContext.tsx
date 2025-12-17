@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { defaultLanguage, translations } from '@/lib/i18n';
+import { defaultLanguage, isLanguage, translations } from '@/lib/i18n';
 import type { Language, TranslationKey } from '@/lib/i18n';
 
 type TranslationParams = Record<string, string | number>;
@@ -15,24 +15,37 @@ type I18nContextValue = {
 
 const I18nContext = createContext<I18nContextValue | undefined>(undefined);
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<Language>(defaultLanguage);
+function getInitialLanguage(): Language {
+  if (typeof window === 'undefined') {
+    return defaultLanguage;
+  }
 
-  useEffect(() => {
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('language') : null;
-    if (stored === 'fr' || stored === 'en') {
-      setLanguage(stored);
-      return;
-    }
-    const browserLang = typeof navigator !== 'undefined' ? navigator.language.slice(0, 2) : defaultLanguage;
-    if (browserLang === 'fr' || browserLang === 'en') {
-      setLanguage(browserLang);
-    }
-  }, []);
+  const stored = localStorage.getItem('language');
+  if (stored === 'fr' || stored === 'en') {
+    return stored;
+  }
+
+  const cookieMatch = document.cookie.match(/(?:^|;\s*)language=([^;]+)/);
+  const cookieLang = cookieMatch ? decodeURIComponent(cookieMatch[1]) : null;
+  if (isLanguage(cookieLang)) {
+    return cookieLang;
+  }
+
+  const browserLang = navigator.language.slice(0, 2);
+  if (browserLang === 'fr' || browserLang === 'en') {
+    return browserLang;
+  }
+
+  return defaultLanguage;
+}
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [language, setLanguage] = useState<Language>(getInitialLanguage);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('language', language);
+      document.cookie = `language=${encodeURIComponent(language)}; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 365}`;
       document.documentElement.lang = language;
     }
   }, [language]);

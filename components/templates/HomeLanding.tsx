@@ -1,5 +1,3 @@
-"use client";
-
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight, CreditCard, PiggyBank, Send, Sparkles, BadgeDollarSign, TrendingUp, ShieldHalf, Wallet } from 'lucide-react';
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
@@ -7,10 +5,26 @@ import ThemeToggle from '@/components/atoms/ThemeToggle';
 import Card from '@/components/atoms/Card';
 import Button from '@/components/atoms/Button';
 import LiquidChrome from '@/components/LiquidChrome';
-import { useI18n } from '@/contexts/I18nContext';
+import { getServerT } from '@/lib/i18n-server';
+import type { HomeMetrics } from '@/lib/server/home-metrics';
 
-export default function HomeLanding() {
-  const { t } = useI18n();
+type HomeLandingProps = {
+  metricsPromise: Promise<HomeMetrics>;
+};
+
+function formatCompactEur(value: number, language: 'fr' | 'en') {
+  const intlLocale = language === 'fr' ? 'fr-FR' : 'en-GB';
+  return new Intl.NumberFormat(intlLocale, {
+    style: 'currency',
+    currency: 'EUR',
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+export default async function HomeLanding({ metricsPromise }: HomeLandingProps) {
+  const { t, language } = await getServerT();
+  const metrics = await metricsPromise;
 
   const quickActions = [
     { icon: Send, label: t('home.quick.transfer') },
@@ -56,7 +70,7 @@ export default function HomeLanding() {
             </div>
             <div>
               <p className="text-sm uppercase tracking-[0.4em] text-white/50">Avenir</p>
-              <h1 className="text-2xl font-semibold text-white">Banking, refined</h1>
+              <h1 className="text-2xl font-semibold text-white">{t('home.brandHeadline')}</h1>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -95,12 +109,12 @@ export default function HomeLanding() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card hover className="space-y-3 border-white/15 bg-black/30">
                   <p className="text-xs uppercase tracking-[0.4em] text-white/60">{t('home.metric.volumeLabel')}</p>
-                  <p className="text-4xl font-semibold text-white">€2,8M</p>
-                  <p className="text-sm text-success">+18% {t('home.metric.vsLastMonth')}</p>
+                  <p className="text-4xl font-semibold text-white">{formatCompactEur(metrics.volumeManagedEur, language)}</p>
+                  <p className="text-sm text-success">+{metrics.vsLastMonthPct}% {t('home.metric.vsLastMonth')}</p>
                 </Card>
                 <Card hover className="space-y-3 border-white/15 bg-black/25">
                   <p className="text-xs uppercase tracking-[0.4em] text-white/60">{t('home.metric.npsLabel')}</p>
-                  <p className="text-4xl font-semibold text-white">74</p>
+                  <p className="text-4xl font-semibold text-white">{metrics.nps}</p>
                   <p className="text-sm text-white/70">NPS</p>
                 </Card>
               </div>

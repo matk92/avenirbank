@@ -123,6 +123,7 @@ const baseTranslations = {
   "clientPortal.subtitle": "Pilotage instantané, sécurité premium",
   "home.heroTitle": "Pilotez votre patrimoine en toute confiance",
   "home.heroSubtitle": "Une plateforme responsable pour suivre vos comptes, votre épargne et vos investissements au quotidien.",
+  "home.brandHeadline": "La banque, en mieux",
   "home.ctaClient": "Espace client",
   "home.ctaDiscover": "Découvrir la plateforme",
   "home.tagline": "Neo banking • Premium",
@@ -291,6 +292,7 @@ const baseTranslations = {
   "clientPortal.subtitle": "Instant control, premium safety",
   "home.heroTitle": "Manage your wealth with confidence",
   "home.heroSubtitle": "A responsible platform to monitor your accounts, savings and investments every day.",
+  "home.brandHeadline": "Banking, refined",
   "home.ctaClient": "Client area",
   "home.ctaDiscover": "Explore the platform",
   "home.tagline": "Neo banking • Premium",
@@ -346,3 +348,20 @@ type TranslationRecord = Record<Language, Record<TranslationKey, string>>;
 export const translations: TranslationRecord = baseTranslations;
 
 export const defaultLanguage: Language = "fr";
+
+type TranslationParams = Record<string, string | number>;
+
+export function translate(language: Language, key: TranslationKey, params?: TranslationParams): string {
+  const template = translations[language]?.[key] ?? key;
+  if (!params) {
+    return template;
+  }
+  return template.replace(/\{(\w+)\}/g, (_, token: string) => {
+    const value = params[token];
+    return value !== undefined ? String(value) : `{${token}}`;
+  });
+}
+
+export function isLanguage(value: string | undefined | null): value is Language {
+  return value === 'fr' || value === 'en';
+}

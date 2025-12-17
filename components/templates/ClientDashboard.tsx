@@ -93,7 +93,7 @@ export default function ClientDashboard() {
             <div className="space-y-4">
               {recentActivity.map((item) => (
                 <div key={item.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs uppercase tracking-[0.4em] text-white/50">
+                  <p className="text-xs uppercase tracking-[0.4em] text-white/50" suppressHydrationWarning>
                     {formatDateTime(item.publishedAt, language)}
                   </p>
                   <p className="text-base font-semibold text-white">{item.title}</p>

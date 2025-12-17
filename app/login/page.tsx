@@ -41,7 +41,7 @@ export default function LoginPage() {
     setSuccess(null);
 
     try {
-      const response = await fetch('http://localhost:3001/auth/login', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -61,18 +61,6 @@ export default function LoginPage() {
 
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
-
-      // Middleware lit uniquement les cookies (pas le localStorage) -> on persiste le token en cookie aussi.
-      const cookieParts = [
-        `token=${encodeURIComponent(String(data.access_token))}`,
-        'Path=/',
-        'SameSite=Lax',
-        `Max-Age=${60 * 60 * 24 * 7}`,
-      ];
-      if (window.location.protocol === 'https:') {
-        cookieParts.push('Secure');
-      }
-      document.cookie = cookieParts.join('; ');
 
       setSuccess(t('form.success.generic'));
       

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import HomeLanding from "@/components/templates/HomeLanding";
+import { getHomeMetrics } from "@/lib/server/home-metrics";
 
 export const metadata: Metadata = {
   title: "Avenir Bank — Banque digitale responsable",
@@ -15,5 +16,6 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return <HomeLanding />;
+  const metricsPromise = getHomeMetrics();
+  return <HomeLanding metricsPromise={metricsPromise} />;
 }
