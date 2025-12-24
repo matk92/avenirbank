@@ -14,7 +14,6 @@ export type CreateActivityPayload = {
   description: string;
 };
 
-// Notifications
 export type Notification = {
   id: string;
   recipientId: string;
@@ -65,3 +64,70 @@ export type ClientProfile = {
   lastName: string;
   email: string;
 };
+
+export interface Credit {
+  id: string;
+  clientId: string;
+  clientName: string;
+  amount: number;
+  annualInterestRate: number;
+  insuranceRate: number;
+  durationMonths: number;
+  monthlyPayment: number;
+  monthlyInsurance: number;
+  totalAmount: number;
+  remainingAmount: number;
+  status: 'pending' | 'approved' | 'rejected' | 'active' | 'completed';
+  advisorId: string;
+  createdAt: Date;
+  approvedAt?: Date;
+}
+
+export interface CreditCalculation {
+  monthlyPayment: number;
+  monthlyInsurance: number;
+  totalAmount: number;
+  totalInterest: number;
+  totalInsurance: number;
+  amortizationSchedule: {
+    month: number;
+    principal: number;
+    interest: number;
+    insurance: number;
+    remainingBalance: number;
+  }[];
+}
+
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: UserRole;
+  content: string;
+  timestamp: Date;
+  read: boolean;
+}
+
+export interface ConversationFull {
+  id: string;
+  clientId: string;
+  clientName: string;
+  advisorId?: string;
+  advisorName?: string;
+  status: 'pending' | 'active' | 'closed';
+  lastMessage?: Message;
+  unreadCount: number;
+  createdAt: Date;
+  transferredAt?: Date;
+}
+
+export interface ConversationTransfer {
+  conversationId: string;
+  fromAdvisorId: string;
+  fromAdvisorName: string;
+  toAdvisorId: string;
+  toAdvisorName: string;
+  reason: string;
+  timestamp: Date;
+}
