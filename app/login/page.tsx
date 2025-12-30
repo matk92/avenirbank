@@ -64,9 +64,15 @@ export default function LoginPage() {
 
       setSuccess(t('form.success.generic'));
       
-      // Redirect to dashboard after 1 second
+      // Redirect based on user role
       setTimeout(() => {
-        router.replace('/client');
+        if (data.role === 'ADVISOR') {
+          router.replace('/advisor');
+        } else if (data.role === 'DIRECTOR') {
+          router.replace('/director');
+        } else {
+          router.replace('/client');
+        }
       }, 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export function middleware(request: NextRequest): NextResponse | undefined {
   const token = request.cookies.get('token')?.value;
+  const userRole = request.cookies.get('userRole')?.value;
   const pathname = request.nextUrl.pathname;
 
   // Skip files (e.g. /sitemap.xml, /file.svg) so auth doesn't break static assets / SEO files.
@@ -15,9 +16,15 @@ export function middleware(request: NextRequest): NextResponse | undefined {
   const isPublicRoute = publicRoutes.includes(pathname);
   const isAuthRoute = authRoutes.includes(pathname);
 
-  // If user is authenticated and tries to access login/register, redirect to client dashboard
+  // If user is authenticated and tries to access login/register, redirect based on role
   if (token && isAuthRoute) {
-    return NextResponse.redirect(new URL('/client', request.url));
+    if (userRole === 'ADVISOR') {
+      return NextResponse.redirect(new URL('/advisor', request.url));
+    } else if (userRole === 'DIRECTOR') {
+      return NextResponse.redirect(new URL('/director', request.url));
+    } else {
+      return NextResponse.redirect(new URL('/client', request.url));
+    }
   }
 
   // If user is not authenticated and tries to access protected routes, redirect to login

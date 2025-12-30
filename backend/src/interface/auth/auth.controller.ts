@@ -18,6 +18,7 @@ interface RegisterResponse {
 
 interface LoginResponse {
   access_token: string;
+  role: string;
   user: UserResponse;
 }
 
@@ -59,6 +60,7 @@ export class AuthController {
 
     return {
       access_token: 'jwt-token-' + result.user.id,
+      role: result.user.role,
       user: {
         id: result.user.id,
         email: result.user.email,
