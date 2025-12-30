@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 type LoginBody = { email: string; password: string };
 
 export async function POST(request: Request) {
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+  const apiBase =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
   let body: LoginBody;
   try {
@@ -12,12 +13,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Corps de requête invalide' }, { status: 400 });
   }
 
-  const upstream = await fetch(`${apiBase}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    cache: 'no-store',
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${apiBase}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    });
+  } catch {
+    return NextResponse.json({ message: "Impossible de joindre l'API backend" }, { status: 502 });
+  }
 
   const payload = await upstream.json().catch(() => null);
   if (!upstream.ok) {
