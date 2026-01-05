@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '@interface/auth/auth.module';
 import { UsersModule } from '@interface/users/users.module';
 import { AccountsModule } from '@interface/accounts/accounts.module';
@@ -12,6 +13,9 @@ import { NotificationsModule } from '@interface/notifications/notifications.modu
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DATABASE_HOST || 'postgres',

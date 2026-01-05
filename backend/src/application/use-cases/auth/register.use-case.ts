@@ -1,8 +1,10 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { hash } from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'crypto';
 import { User, UserRole } from '@domain/entities/user.entity';
-import { UserPostgresRepository } from '@infrastructure/database/repositories/user.postgres.repository';
+import { IUserRepository } from '@domain/repositories/user.repository.interface';
+import { IEmailService } from '../../interfaces/email-service.interface';
 
 /**
  * Register Use Case - Application Layer
@@ -27,7 +29,10 @@ export interface RegisterOutput {
 
 @Injectable()
 export class RegisterUseCase {
-  constructor(private readonly userRepository: UserPostgresRepository) {}
+  constructor(
+    private readonly userRepository: IUserRepository,
+    private readonly emailService: IEmailService
+  ) {}
 
   async execute(input: RegisterInput): Promise<RegisterOutput> {
     // Validate input
@@ -52,8 +57,21 @@ export class RegisterUseCase {
       UserRole.CLIENT, // New users are always clients
     );
 
+    // Generate verification token
+    const generateToken = () => randomBytes(32).toString('hex');
+    user.generateEmailConfirmationToken(generateToken);
+    
     // Save to repository
     const savedUser = await this.userRepository.save(user);
+
+    // Send verification email
+    if (savedUser.emailConfirmationToken) {
+      await this.emailService.sendVerificationEmail(
+        savedUser.email,
+        savedUser.emailConfirmationToken,
+        `${savedUser.firstName} ${savedUser.lastName}`
+      );
+    }
 
     // Return output
     return {

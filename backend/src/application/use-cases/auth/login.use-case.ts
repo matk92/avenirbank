@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { compare } from 'bcrypt';
-import { UserPostgresRepository } from '@infrastructure/database/repositories/user.postgres.repository';
+import { IUserRepository } from '@domain/repositories/user.repository.interface';
 import { User } from '@domain/entities/user.entity';
 
 /**
@@ -19,7 +19,7 @@ export interface LoginOutput {
 
 @Injectable()
 export class LoginUseCase {
-  constructor(private readonly userRepository: UserPostgresRepository) {}
+  constructor(private readonly userRepository: IUserRepository) {}
 
   async execute(input: LoginInput): Promise<LoginOutput> {
     this.validateInput(input);
@@ -34,6 +34,11 @@ export class LoginUseCase {
     const isPasswordValid = await compare(input.password, user.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+    
+    // Check if email is verified
+    if (!user.isEmailConfirmed) {
+      throw new UnauthorizedException('Please verify your email before logging in');
     }
 
     return { user };

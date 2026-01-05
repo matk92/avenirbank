@@ -1,8 +1,9 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, Param } from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterUseCase } from '@application/use-cases/auth/register.use-case';
 import { LoginUseCase } from '@application/use-cases/auth/login.use-case';
+import { ConfirmEmailUseCase } from '@application/use-cases/email-verification/confirm-email.use-case';
 
 interface UserResponse {
   id: string;
@@ -26,6 +27,7 @@ export class AuthController {
   constructor(
     private readonly registerUseCase: RegisterUseCase,
     private readonly loginUseCase: LoginUseCase,
+    private readonly confirmEmailUseCase: ConfirmEmailUseCase,
   ) {}
 
   @Post('register')
@@ -39,7 +41,7 @@ export class AuthController {
     });
 
     return {
-      message: 'User registered successfully',
+      message: 'User registered successfully. Please check your email to verify your account.',
       user: {
         id: result.id,
         email: result.email,
@@ -66,5 +68,19 @@ export class AuthController {
         lastName: result.user.lastName,
       },
     };
+  }
+  
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(@Body() body: { token: string }): Promise<{ message: string }> {
+    await this.confirmEmailUseCase.execute(body.token);
+    return { message: 'Email verified successfully' };
+  }
+  
+  @Get('verify-email/:token')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmailGet(@Param('token') token: string): Promise<{ message: string }> {
+    await this.confirmEmailUseCase.execute(token);
+    return { message: 'Email verified successfully' };
   }
 }

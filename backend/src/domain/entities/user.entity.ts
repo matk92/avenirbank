@@ -42,9 +42,55 @@ export class User {
     this.createdAt = new Date();
     this.updatedAt = new Date();
   }
+  
+  /**
+   * Generate email confirmation token
+   * @param tokenGenerator Function to generate a secure token
+   * @param expiryHours Number of hours until token expires
+   */
+  generateEmailConfirmationToken(tokenGenerator: () => string, expiryHours = 24): void {
+    if (this.isEmailConfirmed) {
+      throw new Error('Email already confirmed');
+    }
+    
+    this.emailConfirmationToken = tokenGenerator();
+    
+    const expiryDate = new Date();
+    expiryDate.setHours(expiryDate.getHours() + expiryHours);
+    this.emailConfirmationTokenExpiry = expiryDate;
+    
+    this.updatedAt = new Date();
+  }
 
   /**
-   * Confirm user email
+   * Confirm user email with token
+   * @param token The confirmation token to validate
+   */
+  confirmEmailWithToken(token: string): void {
+    if (this.isEmailConfirmed) {
+      throw new Error('Email already confirmed');
+    }
+    
+    if (!this.emailConfirmationToken || !this.emailConfirmationTokenExpiry) {
+      throw new Error('No confirmation token found');
+    }
+    
+    if (this.emailConfirmationToken !== token) {
+      throw new Error('Invalid confirmation token');
+    }
+    
+    if (this.emailConfirmationTokenExpiry < new Date()) {
+      throw new Error('Confirmation token expired');
+    }
+    
+    this.isEmailConfirmed = true;
+    this.emailConfirmationToken = undefined;
+    this.emailConfirmationTokenExpiry = undefined;
+    this.updatedAt = new Date();
+  }
+  
+  /**
+   * Confirm user email (for admin use)
    */
   confirmEmail(): void {
     if (this.isEmailConfirmed) {
@@ -53,6 +99,7 @@ export class User {
     this.isEmailConfirmed = true;
     this.emailConfirmationToken = undefined;
     this.emailConfirmationTokenExpiry = undefined;
+    this.updatedAt = new Date();
   }
 
   /**

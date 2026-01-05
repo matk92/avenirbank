@@ -15,6 +15,7 @@ export async function POST(request: Request) {
 
   let upstream: Response;
   try {
+    console.log('Sending login request to backend:', `${apiBase}/auth/login`, body);
     upstream = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
 
   const payload = await upstream.json().catch(() => null);
   if (!upstream.ok) {
+    console.log('Login failed with status:', upstream.status, 'and payload:', payload);
     return NextResponse.json(payload ?? { message: 'Login failed' }, { status: upstream.status });
   }
 
