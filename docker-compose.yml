@@ -30,13 +30,14 @@ services:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://avenir:password@postgres:5432/avenirbank
       - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-jwt-secret
     depends_on:
       - postgres
       - redis
     volumes:
       - ./backend:/app
       - /app/node_modules
-    command: npm run dev
+    command: sh -c "npm run seed && npm run dev"
 
   # PostgreSQL Database
   postgres:

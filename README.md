@@ -1,4 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## AVENIR Bank
+
+### Démarrage (Docker)
+
+```bash
+docker compose up -d --build
+```
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:3001`
+
+### Comptes seed (démo)
+
+Au démarrage, le backend exécute automatiquement un seed idempotent (création si absents).
+
+- Director: `director@avenir.test` / `Director123!`
+- Advisor: `advisor@avenir.test` / `Advisor123!`
+
+Si besoin, vous pouvez relancer manuellement:
+
+```bash
+docker exec avenirbank-backend npm run seed
+```
+
+### Démarrage (local)
 
 ## Getting Started
 

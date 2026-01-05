@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, Wallet, PiggyBank, TrendingUp, Newspaper, MessageSquare } from 'lucide-react';
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
 import ThemeToggle from '@/components/atoms/ThemeToggle';
 import DarkVeil from '@/components/DarkVeil';
 import { useI18n } from '@/contexts/I18nContext';
 import type { TranslationKey } from '@/lib/i18n';
+import { logout } from '@/lib/logout';
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -22,6 +23,7 @@ const navItems: { href: string; labelKey: TranslationKey; icon: LucideIcon }[] =
 
 export default function ClientShell({ children }: { children: ReactNode }) {
 	const pathname = usePathname();
+	const router = useRouter();
 	const { t, language } = useI18n();
 
 	return (
@@ -46,6 +48,16 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 						<div className="flex items-center gap-3">
 							<ThemeToggle />
 							<LanguageSwitcher />
+							<button
+								type="button"
+								onClick={async () => {
+									await logout();
+									router.replace('/login');
+								}}
+								className="cursor-pointer rounded-2xl bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20"
+							>
+								{t('navigation.logout')}
+							</button>
 						</div>
 					</div>
 				</header>

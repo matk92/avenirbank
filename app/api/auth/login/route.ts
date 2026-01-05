@@ -43,6 +43,18 @@ export async function POST(request: Request) {
     path: '/',
     maxAge: 60 * 60 * 24 * 7,
   });
+  
+  // Store role in cookie for middleware access
+  if (payload?.role) {
+    response.cookies.set('userRole', String(payload.role), {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+    });
+  }
+  
   return response;
 }
 

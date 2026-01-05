@@ -1,8 +1,11 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, Req, UseGuards } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterUseCase } from '@application/use-cases/auth/register.use-case';
 import { LoginUseCase } from '@application/use-cases/auth/login.use-case';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import type { Request } from 'express';
 
 interface UserResponse {
   id: string;
@@ -18,6 +21,7 @@ interface RegisterResponse {
 
 interface LoginResponse {
   access_token: string;
+  role: string;
   user: UserResponse;
 }
 
@@ -26,6 +30,7 @@ export class AuthController {
   constructor(
     private readonly registerUseCase: RegisterUseCase,
     private readonly loginUseCase: LoginUseCase,
+    private readonly jwtService: JwtService,
   ) {}
 
   @Post('register')
@@ -57,8 +62,15 @@ export class AuthController {
       password: loginDto.password,
     });
 
+    const token = await this.jwtService.signAsync({
+      sub: result.user.id,
+      role: result.user.role,
+      email: result.user.email,
+    });
+
     return {
-      access_token: 'jwt-token-' + result.user.id,
+      access_token: token,
+      role: result.user.role,
       user: {
         id: result.user.id,
         email: result.user.email,
@@ -66,5 +78,12 @@ export class AuthController {
         lastName: result.user.lastName,
       },
     };
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async me(@Req() req: Request) {
+    return { user: (req as any).user };
   }
 }
