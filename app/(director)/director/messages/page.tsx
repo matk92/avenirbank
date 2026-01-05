@@ -2,6 +2,6 @@
 
 import UniversalMessagingPanel from '@/components/organisms/UniversalMessagingPanel';
 
-export default function MessagesPage() {
+export default function DirectorMessagesPage() {
   return <UniversalMessagingPanel />;
 }

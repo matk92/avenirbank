@@ -1,5 +1,7 @@
-import MessagingPanel from '@/components/organisms/MessagingPanel';
+'use client';
+
+import UniversalMessagingPanel from '@/components/organisms/UniversalMessagingPanel';
 
 export default function MessagesPage() {
-  return <MessagingPanel />;
+  return <UniversalMessagingPanel />;
 }

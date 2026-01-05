@@ -10,7 +10,7 @@ export default function CreateActivityPage() {
 	const router = useRouter();
 
 	const handleCreateActivity = async (data: CreateActivityPayload) => {
-		const response = await fetch('http://localhost:3001/activities', {
+		const response = await fetch('http://localhost:3001/advisor/activities', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
