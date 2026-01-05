@@ -11,25 +11,55 @@ export function middleware(request: NextRequest): NextResponse | undefined {
     return undefined;
   }
 
+  const roleHome: Record<string, string> = {
+    CLIENT: '/client',
+    ADVISOR: '/advisor',
+    DIRECTOR: '/director',
+  };
+
+  const roleProtectedPrefixes: Array<{ prefix: string; role: string }> = [
+    { prefix: '/client', role: 'CLIENT' },
+    { prefix: '/advisor', role: 'ADVISOR' },
+    { prefix: '/director', role: 'DIRECTOR' },
+  ];
+
   const authRoutes = ['/login', '/register', '/auth/login', '/auth/register'];
   const publicRoutes = ['/', ...authRoutes];
   const isPublicRoute = publicRoutes.includes(pathname);
   const isAuthRoute = authRoutes.includes(pathname);
 
+  if (token && pathname === '/') {
+    const destination = (userRole && roleHome[userRole]) || '/client';
+    return NextResponse.redirect(new URL(destination, request.url));
+  }
+
   // If user is authenticated and tries to access login/register, redirect based on role
   if (token && isAuthRoute) {
-    if (userRole === 'ADVISOR') {
-      return NextResponse.redirect(new URL('/advisor', request.url));
-    } else if (userRole === 'DIRECTOR') {
-      return NextResponse.redirect(new URL('/director', request.url));
-    } else {
-      return NextResponse.redirect(new URL('/client', request.url));
-    }
+    const destination = (userRole && roleHome[userRole]) || '/client';
+    return NextResponse.redirect(new URL(destination, request.url));
   }
 
   // If user is not authenticated and tries to access protected routes, redirect to login
   if (!token && !isPublicRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  if (token) {
+    const protectedRoute = roleProtectedPrefixes.find(({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+
+    if (protectedRoute) {
+      if (!userRole) {
+        const response = NextResponse.redirect(new URL('/login', request.url));
+        response.cookies.delete('token');
+        response.cookies.delete('userRole');
+        return response;
+      }
+
+      if (userRole !== protectedRoute.role) {
+        const destination = roleHome[userRole] ?? '/login';
+        return NextResponse.redirect(new URL(destination, request.url));
+      }
+    }
   }
 
   return undefined;

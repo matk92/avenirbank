@@ -10,7 +10,7 @@ export function useWebSocket(namespace: string) {
 	React.useEffect(() => {
 		const newSocket = io(`http://localhost:3001${namespace}`, {
 			auth: {
-				token: localStorage.getItem('advisor-token'),
+				token: localStorage.getItem('token'),
 			},
 		});
 

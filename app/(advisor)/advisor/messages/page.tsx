@@ -13,7 +13,7 @@ export default function MessagesPage() {
 	React.useEffect(() => {
 		fetch('http://localhost:3001/advisor/conversations', {
 			headers: {
-				Authorization: `Bearer ${localStorage.getItem('advisor-token')}`,
+				Authorization: `Bearer ${localStorage.getItem('token')}`,
 			},
 		})
 			.then((res) => res.json())

@@ -18,7 +18,7 @@ export default function ActivitiesListPage() {
 		// Charger les actualités
 		fetch('http://localhost:3001/activities', {
 			headers: {
-				Authorization: `Bearer ${localStorage.getItem('advisor-token')}`,
+				Authorization: `Bearer ${localStorage.getItem('token')}`,
 			},
 		})
 			.then((res) => res.json())

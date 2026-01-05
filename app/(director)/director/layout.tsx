@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, Users, Percent, TrendingUp } from 'lucide-react';
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
 import ThemeToggle from '@/components/atoms/ThemeToggle';
 import DarkVeil from '@/components/DarkVeil';
+import { logout } from '@/lib/logout';
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -18,6 +19,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 
 export default function DirectorLayout({ children }: { children: ReactNode }) {
 	const pathname = usePathname();
+	const router = useRouter();
 
 	return (
 		<div className="relative min-h-screen bg-(--background) text-white">
@@ -55,12 +57,16 @@ export default function DirectorLayout({ children }: { children: ReactNode }) {
 						<div className="flex items-center gap-3">
 							<LanguageSwitcher />
 							<ThemeToggle />
-							<Link
-								href="/auth/login"
-								className="rounded-lg bg-amber-500/20 px-4 py-2 text-sm font-medium text-amber-400 transition hover:bg-amber-500/30 border border-amber-500/30"
+							<button
+								type="button"
+								onClick={async () => {
+									await logout();
+									router.replace('/login');
+								}}
+								className="cursor-pointer rounded-lg bg-amber-500/20 px-4 py-2 text-sm font-medium text-amber-400 transition hover:bg-amber-500/30 border border-amber-500/30"
 							>
 								Déconnexion
-							</Link>
+							</button>
 						</div>
 					</div>
 				</nav>

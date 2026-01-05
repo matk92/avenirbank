@@ -16,7 +16,7 @@ export default function SendNotificationPage() {
 	React.useEffect(() => {
 		fetch('http://localhost:3001/advisor/clients', {
 			headers: {
-				Authorization: `Bearer ${localStorage.getItem('advisor-token')}`,
+				Authorization: `Bearer ${localStorage.getItem('token')}`,
 			},
 		})
 			.then((res) => res.json())
@@ -24,7 +24,7 @@ export default function SendNotificationPage() {
 			.catch((error) => console.error('Erreur chargement clients:', error));
 		fetch('http://localhost:3001/advisor/notifications/recent', {
 			headers: {
-				Authorization: `Bearer ${localStorage.getItem('advisor-token')}`,
+				Authorization: `Bearer ${localStorage.getItem('token')}`,
 			},
 		})
 			.then((res) => res.json())
@@ -37,7 +37,7 @@ export default function SendNotificationPage() {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				Authorization: `Bearer ${localStorage.getItem('advisor-token')}`,
+				Authorization: `Bearer ${localStorage.getItem('token')}`,
 			},
 			body: JSON.stringify(data),
 		});
@@ -50,7 +50,7 @@ export default function SendNotificationPage() {
 		setTimeout(() => setSuccessMessage(''), 5000);
 		const updatedNotifications = await fetch('http://localhost:3001/advisor/notifications/recent', {
 			headers: {
-				Authorization: `Bearer ${localStorage.getItem('advisor-token')}`,
+				Authorization: `Bearer ${localStorage.getItem('token')}`,
 			},
 		}).then((res) => res.json());
 		setRecentNotifications(updatedNotifications);

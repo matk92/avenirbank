@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, Newspaper, Bell, MessageSquare, Users } from 'lucide-react';
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
 import ThemeToggle from '@/components/atoms/ThemeToggle';
 import DarkVeil from '@/components/DarkVeil';
 import { useI18n } from '@/contexts/I18nContext';
+import { logout } from '@/lib/logout';
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -20,6 +21,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 
 export default function AdvisorLayout({ children }: { children: ReactNode }) {
 	const pathname = usePathname();
+	const router = useRouter();
 	const { language } = useI18n();
 
 	return (
@@ -58,12 +60,16 @@ export default function AdvisorLayout({ children }: { children: ReactNode }) {
 						<div className="flex items-center gap-3">
 							<LanguageSwitcher />
 							<ThemeToggle />
-							<Link
-								href="/auth/login"
-								className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20"
+							<button
+								type="button"
+								onClick={async () => {
+									await logout();
+									router.replace('/login');
+								}}
+								className="cursor-pointer rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20"
 							>
 								Déconnexion
-							</Link>
+							</button>
 						</div>
 					</div>
 				</nav>
