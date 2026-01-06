@@ -43,6 +43,7 @@ export default function MessagingPanel() {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [advisorTyping, setAdvisorTyping] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { socket, isConnected } = useWebSocket('/messaging');
@@ -54,6 +55,16 @@ export default function MessagingPanel() {
   });
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setCurrentUserId(payload.sub);
+      } catch (e) {
+        console.error('Error parsing token:', e);
+      }
+    }
+
     const fetchConversation = async () => {
       try {
         const token = localStorage.getItem('token');
@@ -102,9 +113,17 @@ export default function MessagingPanel() {
 
     socket.emit('join-conversation', { conversationId: conversation.id });
 
+    socket.emit('mark-read', { conversationId: conversation.id });
+    setMessages((prev) =>
+      prev.map((m) => (m.conversationId === conversation.id && m.senderRole !== 'client' ? { ...m, read: true } : m)),
+    );
+
     socket.on('new-message', (message: Message) => {
       if (message.conversationId === conversation.id) {
         setMessages((prev) => [...prev, message]);
+        if (message.senderRole !== 'client') {
+          socket.emit('mark-read', { conversationId: message.conversationId });
+        }
       }
     });
 
@@ -118,10 +137,18 @@ export default function MessagingPanel() {
       }
     });
 
+    socket.on('messages-read', (data: { conversationId: string; messageIds: string[]; readerId: string }) => {
+      if (data.conversationId !== conversation.id) return;
+      setMessages((prev) =>
+        prev.map((m) => (data.messageIds.includes(m.id) ? { ...m, read: true } : m)),
+      );
+    });
+
     return () => {
       socket.emit('leave-conversation', { conversationId: conversation.id });
       socket.off('new-message');
       socket.off('user-typing');
+      socket.off('messages-read');
     };
   }, [socket, isConnected, conversation]);
 
@@ -203,6 +230,11 @@ export default function MessagingPanel() {
                 <span className="mt-1 text-xs text-zinc-400">
                   {formatDateTime(message.timestamp, language)}
                 </span>
+                {message.senderId === currentUserId && (
+                  <span className="mt-0.5 text-[11px] text-zinc-500">
+                    {message.read ? 'Lu' : 'Envoyé'}
+                  </span>
+                )}
               </div>
             ))
           )}

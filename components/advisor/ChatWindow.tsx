@@ -28,6 +28,20 @@ export default function ChatWindow({
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socket = useWebSocket('/messaging');
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+  const lastTypingSentAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      setCurrentUserId(payload.sub);
+    } catch (e) {
+      console.error('Error parsing token:', e);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -57,17 +71,31 @@ export default function ChatWindow({
     if (!socket.socket || !socket.isConnected) return;
 
     socket.socket.emit('join-conversation', { conversationId });
+    socket.socket.emit('mark-read', { conversationId });
+    setMessages((prev) => prev.map((m) => (m.senderRole === 'client' ? { ...m, read: true } : m)));
 
     socket.socket.on('new-message', (message: Message) => {
       if (message.conversationId === conversationId) {
         setMessages((prev) => [...prev, message]);
+
+        if (message.senderRole === 'client') {
+          socket.socket?.emit('mark-read', { conversationId: message.conversationId });
+        }
       }
+    });
+
+    socket.socket.on('messages-read', (data: { conversationId: string; messageIds: string[]; readerId: string }) => {
+      if (data.conversationId !== conversationId) return;
+      setMessages((prev) =>
+        prev.map((m) => (data.messageIds.includes(m.id) ? { ...m, read: true } : m)),
+      );
     });
 
     return () => {
       if (socket.socket) {
         socket.socket.emit('leave-conversation', { conversationId });
         socket.socket.off('new-message');
+        socket.socket.off('messages-read');
       }
     };
   }, [socket, conversationId]);
@@ -159,6 +187,11 @@ export default function ChatWindow({
                   <span className="text-xs opacity-60">{formatTime(message.timestamp)}</span>
                 </div>
                 <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                {message.senderId === currentUserId && (
+                  <div className="mt-1 text-right text-[11px] opacity-70">
+                    {message.read ? 'Lu' : 'Envoyé'}
+                  </div>
+                )}
               </div>
             </div>
           ))
@@ -171,7 +204,18 @@ export default function ChatWindow({
           type="text"
           placeholder="Tapez votre message..."
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={(e) => {
+            const value = e.target.value;
+            setNewMessage(value);
+
+            if (socket.socket && socket.isConnected && value) {
+              const now = Date.now();
+              if (now - lastTypingSentAtRef.current > 800) {
+                lastTypingSentAtRef.current = now;
+                socket.socket.emit('typing', { conversationId });
+              }
+            }
+          }}
           onKeyPress={handleKeyPress}
           className="flex-1"
         />

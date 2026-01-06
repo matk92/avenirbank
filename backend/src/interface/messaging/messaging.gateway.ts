@@ -274,6 +274,63 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     });
   }
 
+  @SubscribeMessage('mark-read')
+  async handleMarkRead(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { conversationId: string },
+  ) {
+    const conversation = await this.conversationRepository.findOne({
+      where: { id: data.conversationId },
+    });
+
+    if (!conversation) return;
+
+    const isParticipant =
+      conversation.user1Id === client.user.sub || conversation.user2Id === client.user.sub;
+    if (!isParticipant) return;
+
+    const otherUserId = conversation.user1Id === client.user.sub ? conversation.user2Id : conversation.user1Id;
+
+    const unreadMessages = await this.messageRepository.find({
+      where: {
+        conversationId: data.conversationId,
+        senderId: otherUserId,
+        read: false,
+      },
+      select: ['id'],
+    });
+
+    const messageIds = unreadMessages.map((m) => m.id);
+
+    if (messageIds.length > 0) {
+      await this.messageRepository.update(
+        {
+          conversationId: data.conversationId,
+          senderId: otherUserId,
+          read: false,
+        },
+        { read: true },
+      );
+    }
+
+    if (conversation.user1Id === client.user.sub) {
+      await this.conversationRepository.update({ id: data.conversationId }, { unreadCountUser1: 0 });
+    } else {
+      await this.conversationRepository.update({ id: data.conversationId }, { unreadCountUser2: 0 });
+    }
+
+    if (messageIds.length === 0) return;
+
+    const payload = {
+      conversationId: data.conversationId,
+      messageIds,
+      readerId: client.user.sub,
+    };
+
+    this.server.to(`conversation:${data.conversationId}`).emit('messages-read', payload);
+    this.server.to(`user:${otherUserId}`).emit('messages-read', payload);
+  }
+
   async notifyNewConversation(conversation: ConversationTypeOrmEntity, clientName: string) {
     this.server.to('advisors').emit('new-conversation', {
       id: conversation.id,

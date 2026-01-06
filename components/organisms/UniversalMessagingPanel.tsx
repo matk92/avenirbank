@@ -69,6 +69,7 @@ export default function UniversalMessagingPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const lastTypingSentAtRef = useRef<number>(0);
 
 
   useEffect(() => {
@@ -216,6 +217,31 @@ export default function UniversalMessagingPanel() {
     setNewMessage('');
   };
 
+  const markSelectedConversationAsRead = useCallback(async (conversationId: string) => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c)),
+    );
+
+    setMessages((prev) =>
+      prev.map((m) => (m.conversationId === conversationId && m.senderId !== currentUserId ? { ...m, read: true } : m)),
+    );
+
+    if (socket && isConnected) {
+      socket.emit('mark-read', { conversationId });
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/messages/conversations/${conversationId}/read`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (error) {
+      console.error('Error marking conversation as read:', error);
+    }
+  }, [socket, isConnected, currentUserId]);
+
   useEffect(() => {
     fetchConversations();
     fetchUsers();
@@ -245,13 +271,24 @@ export default function UniversalMessagingPanel() {
     socket.on('new-message', (message: Message) => {
       if (selectedConversation && message.conversationId === selectedConversation.id) {
         setMessages((prev) => [...prev, message]);
+        if (message.senderId !== currentUserId) {
+          socket.emit('mark-read', { conversationId: message.conversationId });
+          setConversations((prev) =>
+            prev.map((c) => (c.id === message.conversationId ? { ...c, unreadCount: 0 } : c)),
+          );
+          return;
+        }
       }
+
       setConversations((prev) =>
-        prev.map((c) =>
-          c.id === message.conversationId && message.senderId !== currentUserId
-            ? { ...c, unreadCount: c.unreadCount + 1 }
-            : c
-        )
+        prev.map((c) => {
+          if (c.id !== message.conversationId) return c;
+          if (message.senderId === currentUserId) return c;
+          if (selectedConversation && selectedConversation.id === message.conversationId) {
+            return { ...c, unreadCount: 0 };
+          }
+          return { ...c, unreadCount: c.unreadCount + 1 };
+        }),
       );
     });
 
@@ -262,10 +299,16 @@ export default function UniversalMessagingPanel() {
         typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000);
       }
     });
+    socket.on('messages-read', (data: { conversationId: string; messageIds: string[]; readerId: string }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.conversationId === data.conversationId && data.messageIds.includes(m.id) ? { ...m, read: true } : m)),
+      );
+    });
 
     return () => {
       socket.off('new-message');
       socket.off('user-typing');
+      socket.off('messages-read');
     };
   }, [socket, isConnected, selectedConversation, currentUserId]);
 
@@ -273,11 +316,12 @@ export default function UniversalMessagingPanel() {
     if (!socket || !isConnected || !selectedConversation) return;
 
     socket.emit('join-conversation', { conversationId: selectedConversation.id });
+    markSelectedConversationAsRead(selectedConversation.id);
 
     return () => {
       socket.emit('leave-conversation', { conversationId: selectedConversation.id });
     };
-  }, [socket, isConnected, selectedConversation]);
+  }, [socket, isConnected, selectedConversation, markSelectedConversationAsRead]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -564,6 +608,11 @@ export default function UniversalMessagingPanel() {
                           <span className="text-xs opacity-60">{formatTime(message.timestamp)}</span>
                         </div>
                         <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                        {message.senderId === currentUserId && (
+                          <div className="mt-1 text-right text-[11px] opacity-70">
+                            {message.read ? 'Lu' : 'Envoyé'}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -583,7 +632,18 @@ export default function UniversalMessagingPanel() {
                   type="text"
                   placeholder="Tapez votre message..."
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewMessage(value);
+
+                    if (socket && isConnected && selectedConversation && value) {
+                      const now = Date.now();
+                      if (now - lastTypingSentAtRef.current > 800) {
+                        lastTypingSentAtRef.current = now;
+                        socket.emit('typing', { conversationId: selectedConversation.id });
+                      }
+                    }
+                  }}
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();

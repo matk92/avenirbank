@@ -57,6 +57,7 @@ export default function FullMessagingPanel() {
 
   const [activeTab, setActiveTab] = useState<TabType>('conversations');
   const [conversationFilter, setConversationFilter] = useState<'all' | 'pending' | 'active'>('all');
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   
 
   const [conversations, setConversations] = useState<ConversationFull[]>([]);
@@ -83,6 +84,19 @@ export default function FullMessagingPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const lastTypingSentAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      setCurrentUserId(payload.sub);
+    } catch (e) {
+      console.error('Error parsing token:', e);
+    }
+  }, []);
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -255,13 +269,24 @@ export default function FullMessagingPanel() {
     socket.on('new-message', (message: Message) => {
       if (selectedConversation && message.conversationId === selectedConversation.id) {
         setMessages(prev => [...prev, message]);
+
+        if (message.senderRole === 'client') {
+          socket.emit('mark-read', { conversationId: message.conversationId });
+          setConversations((prev) =>
+            prev.map((c) => (c.id === message.conversationId ? { ...c, unreadCount: 0 } : c)),
+          );
+          return;
+        }
       }
 
-      setConversations(prev => prev.map(c =>
-        c.id === message.conversationId
-          ? { ...c, unreadCount: c.unreadCount + 1 }
-          : c
-      ));
+      setConversations(prev => prev.map(c => {
+        if (c.id !== message.conversationId) return c;
+        if (message.senderRole !== 'client') return c;
+        if (selectedConversation && selectedConversation.id === message.conversationId) {
+          return { ...c, unreadCount: 0 };
+        }
+        return { ...c, unreadCount: c.unreadCount + 1 };
+      }));
     });
 
     socket.on('conversation-claimed', ({ conversationId, advisorId, advisorName }) => {
@@ -288,11 +313,18 @@ export default function FullMessagingPanel() {
       }
     });
 
+    socket.on('messages-read', (data: { conversationId: string; messageIds: string[]; readerId: string }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.conversationId === data.conversationId && data.messageIds.includes(m.id) ? { ...m, read: true } : m)),
+      );
+    });
+
     return () => {
       socket.off('new-message');
       socket.off('conversation-claimed');
       socket.off('conversation-transferred');
       socket.off('user-typing');
+      socket.off('messages-read');
     };
   }, [socket, isConnected, selectedConversation]);
 
@@ -300,6 +332,14 @@ export default function FullMessagingPanel() {
     if (!socket || !isConnected || !selectedConversation) return;
 
     socket.emit('join-conversation', { conversationId: selectedConversation.id });
+
+    socket.emit('mark-read', { conversationId: selectedConversation.id });
+    setConversations((prev) =>
+      prev.map((c) => (c.id === selectedConversation.id ? { ...c, unreadCount: 0 } : c)),
+    );
+    setMessages((prev) =>
+      prev.map((m) => (m.conversationId === selectedConversation.id && m.senderRole === 'client' ? { ...m, read: true } : m)),
+    );
 
     return () => {
       socket.emit('leave-conversation', { conversationId: selectedConversation.id });
@@ -669,6 +709,11 @@ export default function FullMessagingPanel() {
                           <span className="text-xs opacity-60">{formatTime(message.timestamp)}</span>
                         </div>
                         <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                        {message.senderId === currentUserId && (
+                          <div className="mt-1 text-right text-[11px] opacity-70">
+                            {message.read ? 'Lu' : 'Envoyé'}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -688,7 +733,18 @@ export default function FullMessagingPanel() {
                   type="text"
                   placeholder="Tapez votre message..."
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewMessage(value);
+
+                    if (socket && isConnected && selectedConversation && value) {
+                      const now = Date.now();
+                      if (now - lastTypingSentAtRef.current > 800) {
+                        lastTypingSentAtRef.current = now;
+                        socket.emit('typing', { conversationId: selectedConversation.id });
+                      }
+                    }
+                  }}
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
