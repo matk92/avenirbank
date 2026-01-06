@@ -341,4 +341,15 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       createdAt: conversation.createdAt,
     });
   }
+
+  emitMessageDeleted(input: { conversationId: string; messageId: string }) {
+    this.server.to(`conversation:${input.conversationId}`).emit('message-deleted', input);
+  }
+
+  emitConversationDeleted(input: { conversationId: string; user1Id: string; user2Id: string }) {
+    this.server.to(`user:${input.user1Id}`).emit('conversation-deleted', { conversationId: input.conversationId });
+    this.server.to(`user:${input.user2Id}`).emit('conversation-deleted', { conversationId: input.conversationId });
+    // Et ceux qui regardent déjà la conversation
+    this.server.to(`conversation:${input.conversationId}`).emit('conversation-deleted', { conversationId: input.conversationId });
+  }
 }

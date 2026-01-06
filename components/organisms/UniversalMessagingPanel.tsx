@@ -70,6 +70,8 @@ export default function UniversalMessagingPanel() {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const lastTypingSentAtRef = useRef<number>(0);
+  const [newIncomingIndicator, setNewIncomingIndicator] = useState(false);
+  const newIncomingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
   useEffect(() => {
@@ -217,6 +219,56 @@ export default function UniversalMessagingPanel() {
     setNewMessage('');
   };
 
+  const deleteConversation = async (conversationId: string) => {
+    const confirmed = window.confirm(
+      'Supprimer cette conversation ? Tous les messages seront supprimés.',
+    );
+    if (!confirmed) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/messages/conversations/${conversationId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        console.error('Error deleting conversation:', await response.text());
+        return;
+      }
+
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      if (selectedConversation?.id === conversationId) {
+        setSelectedConversation(null);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    const confirmed = window.confirm('Retirer ce message ?');
+    if (!confirmed) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/messages/messages/${messageId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        console.error('Error deleting message:', await response.text());
+        return;
+      }
+
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    }
+  };
+
   const markSelectedConversationAsRead = useCallback(async (conversationId: string) => {
     setConversations((prev) =>
       prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c)),
@@ -272,6 +324,9 @@ export default function UniversalMessagingPanel() {
       if (selectedConversation && message.conversationId === selectedConversation.id) {
         setMessages((prev) => [...prev, message]);
         if (message.senderId !== currentUserId) {
+          setNewIncomingIndicator(true);
+          if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
+          newIncomingTimeoutRef.current = setTimeout(() => setNewIncomingIndicator(false), 2000);
           socket.emit('mark-read', { conversationId: message.conversationId });
           setConversations((prev) =>
             prev.map((c) => (c.id === message.conversationId ? { ...c, unreadCount: 0 } : c)),
@@ -292,6 +347,20 @@ export default function UniversalMessagingPanel() {
       );
     });
 
+    socket.on('message-deleted', ({ conversationId, messageId }: { conversationId: string; messageId: string }) => {
+      if (selectedConversation && selectedConversation.id === conversationId) {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      }
+    });
+
+    socket.on('conversation-deleted', ({ conversationId }: { conversationId: string }) => {
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      if (selectedConversation?.id === conversationId) {
+        setSelectedConversation(null);
+        setMessages([]);
+      }
+    });
+
     socket.on('user-typing', ({ conversationId }: { conversationId: string }) => {
       if (selectedConversation && conversationId === selectedConversation.id) {
         setIsTyping(true);
@@ -309,8 +378,16 @@ export default function UniversalMessagingPanel() {
       socket.off('new-message');
       socket.off('user-typing');
       socket.off('messages-read');
+      socket.off('message-deleted');
+      socket.off('conversation-deleted');
     };
   }, [socket, isConnected, selectedConversation, currentUserId]);
+
+  useEffect(() => {
+    return () => {
+      if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!socket || !isConnected || !selectedConversation) return;
@@ -565,9 +642,14 @@ export default function UniversalMessagingPanel() {
                     <ChevronLeft className="h-5 w-5" />
                   </button>
                   <div>
-                    <h3 className="text-lg font-semibold text-white">
-                      {selectedConversation.recipientName}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-semibold text-white">
+                        {selectedConversation.recipientName}
+                      </h3>
+                      {newIncomingIndicator && (
+                        <Badge tone="success">+1</Badge>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       {selectedConversation.recipientEmail && (
                         <p className="text-sm text-zinc-400">{selectedConversation.recipientEmail}</p>
@@ -576,9 +658,17 @@ export default function UniversalMessagingPanel() {
                     </div>
                   </div>
                 </div>
-                {!isConnected && (
-                  <Badge tone="warning">Hors ligne</Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => deleteConversation(selectedConversation.id)}
+                  >
+                    <X className="h-4 w-4" />
+                    Supprimer
+                  </Button>
+                  {!isConnected && <Badge tone="warning">Hors ligne</Badge>}
+                </div>
               </div>
 
               <div className="flex-1 space-y-3 overflow-y-auto py-4">
@@ -609,8 +699,15 @@ export default function UniversalMessagingPanel() {
                         </div>
                         <p className="whitespace-pre-wrap text-sm">{message.content}</p>
                         {message.senderId === currentUserId && (
-                          <div className="mt-1 text-right text-[11px] opacity-70">
-                            {message.read ? 'Lu' : 'Envoyé'}
+                          <div className="mt-1 flex items-center justify-end gap-2 text-[11px] opacity-70">
+                            <button
+                              type="button"
+                              onClick={() => deleteMessage(message.id)}
+                              className="underline underline-offset-2 hover:opacity-100"
+                            >
+                              Retirer
+                            </button>
+                            <span>{message.read ? 'Lu' : 'Envoyé'}</span>
                           </div>
                         )}
                       </div>

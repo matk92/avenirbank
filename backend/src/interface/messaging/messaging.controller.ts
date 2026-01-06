@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -66,5 +67,17 @@ export class MessagingController {
     @Req() req: any,
   ) {
     return this.messagingService.getOrCreateConversation(req.user.sub, body.userId);
+  }
+
+  @Delete('conversations/:id')
+  async deleteConversation(@Param('id') id: string, @Req() req: any) {
+    const success = await this.messagingService.deleteConversation(id, req.user.sub);
+    return { success };
+  }
+
+  @Delete('messages/:id')
+  async deleteMessage(@Param('id') id: string, @Req() req: any) {
+    const success = await this.messagingService.deleteMessage(id, req.user.sub);
+    return { success };
   }
 }

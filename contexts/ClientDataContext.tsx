@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useMemo, useReducer, useCallback } from 'react';
+import { createContext, useContext, useMemo, useReducer, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { generateIban } from '@/lib/iban';
 import { accrueSavingsBalance, calculateOrderTotal } from '@/lib/finance';
@@ -92,6 +92,8 @@ type ClientDataAction =
   | { type: 'SAVINGS_DEPOSIT'; payload: SavingsMovementPayload }
   | { type: 'SAVINGS_WITHDRAW'; payload: SavingsMovementPayload }
   | { type: 'PLACE_ORDER'; payload: PlaceOrderPayload }
+  | { type: 'SET_NOTIFICATIONS'; payload: { notifications: Notification[] } }
+  | { type: 'PREPEND_NOTIFICATION'; payload: { notification: Notification } }
   | { type: 'MARK_NOTIFICATION_READ'; payload: { id: string } }
   | { type: 'APPEND_MESSAGE'; payload: AppendMessagePayload }
   | { type: 'SET_ADVISOR_TYPING'; payload: { typing: boolean } };
@@ -448,6 +450,14 @@ function clientDataReducer(state: ClientDataState, action: ClientDataAction): Cl
         investmentOrders: [order, ...state.investmentOrders],
       };
     }
+    case 'SET_NOTIFICATIONS': {
+      return { ...state, notifications: action.payload.notifications };
+    }
+    case 'PREPEND_NOTIFICATION': {
+      const incoming = action.payload.notification;
+      const withoutDup = state.notifications.filter((n) => n.id !== incoming.id);
+      return { ...state, notifications: [incoming, ...withoutDup] };
+    }
     case 'MARK_NOTIFICATION_READ': {
       const notifications = state.notifications.map((notification) =>
         notification.id === action.payload.id ? { ...notification, read: true } : notification,
@@ -490,6 +500,109 @@ const ClientDataContext = createContext<ClientDataContextValue | undefined>(unde
 
 export function ClientDataProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(clientDataReducer, undefined, createInitialState);
+
+  useEffect(() => {
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    let notificationSource: EventSource | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    const currentTokenRef = { current: null as string | null };
+
+    const cleanupConnection = () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+      notificationSource?.close();
+      notificationSource = null;
+    };
+
+    const fetchNotifications = async (token: string) => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/notifications`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const notifications: Notification[] = Array.isArray(data)
+          ? data.map((n: any) => ({
+              id: String(n.id),
+              message: String(n.message),
+              createdAt: String(n.createdAt),
+              read: Boolean(n.read),
+            }))
+          : [];
+
+        dispatch({ type: 'SET_NOTIFICATIONS', payload: { notifications } });
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+      }
+    };
+
+    const connectNotificationsSSE = (token: string) => {
+      notificationSource?.close();
+      notificationSource = new EventSource(`${BACKEND_URL}/sse/notifications?token=${token}`);
+
+      notificationSource.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed?.type !== 'notification') return;
+          const notif = parsed.data;
+          if (!notif?.id) return;
+          dispatch({
+            type: 'PREPEND_NOTIFICATION',
+            payload: {
+              notification: {
+                id: String(notif.id),
+                message: String(notif.message ?? ''),
+                createdAt: String(notif.createdAt ?? new Date().toISOString()),
+                read: Boolean(notif.read),
+              },
+            },
+          });
+        } catch (e) {
+          console.error('SSE parse error:', e);
+        }
+      };
+
+      notificationSource.onerror = () => {
+        notificationSource?.close();
+        // Reconnect uniquement si le token n'a pas changé entre-temps
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        reconnectTimeout = setTimeout(() => {
+          if (currentTokenRef.current === token) {
+            connectNotificationsSSE(token);
+          }
+        }, 5000);
+      };
+    };
+
+    const ensureConnected = () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        if (currentTokenRef.current) {
+          currentTokenRef.current = null;
+          cleanupConnection();
+        }
+        return;
+      }
+
+      if (currentTokenRef.current === token) return;
+
+      currentTokenRef.current = token;
+      cleanupConnection();
+      fetchNotifications(token);
+      connectNotificationsSSE(token);
+    };
+
+    ensureConnected();
+    pollInterval = setInterval(ensureConnected, 1000);
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+      cleanupConnection();
+    };
+  }, []);
 
   const createAccount = useCallback((payload: CreateAccountPayload) => {
     dispatch({ type: 'CREATE_ACCOUNT', payload });

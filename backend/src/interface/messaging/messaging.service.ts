@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ConversationTypeOrmEntity, ConversationStatusEnum } from '@infrastructure/database/entities/conversation.typeorm.entity';
 import { MessageTypeOrmEntity } from '@infrastructure/database/entities/message.typeorm.entity';
 import { UserTypeOrmEntity, UserRoleEnum } from '@infrastructure/database/entities/user.typeorm.entity';
+import { MessagingGateway } from './messaging.gateway';
 
 @Injectable()
 export class MessagingService {
@@ -15,6 +16,7 @@ export class MessagingService {
     private messageRepository: Repository<MessageTypeOrmEntity>,
     @InjectRepository(UserTypeOrmEntity)
     private userRepository: Repository<UserTypeOrmEntity>,
+    private messagingGateway: MessagingGateway,
   ) {}
 
   async getConversationsForUser(userId: string) {
@@ -229,6 +231,58 @@ export class MessagingService {
 
     return conversation ? this.mapConversationToDto(conversation, userId1) : null;
   }
+
+  async deleteConversation(conversationId: string, userId: string) {
+    const conversation = await this.conversationRepository.findOne({
+      where: { id: conversationId },
+    });
+
+    if (!conversation) return false;
+
+    const isParticipant = conversation.user1Id === userId || conversation.user2Id === userId;
+    if (!isParticipant) return false;
+
+    const result = await this.conversationRepository.delete({ id: conversationId });
+    const success = (result.affected ?? 0) > 0;
+    if (success) {
+      this.messagingGateway.emitConversationDeleted({
+        conversationId,
+        user1Id: conversation.user1Id,
+        user2Id: conversation.user2Id,
+      });
+    }
+    return success;
+  }
+
+  async deleteMessage(messageId: string, userId: string) {
+    const message = await this.messageRepository.findOne({
+      where: { id: messageId },
+    });
+
+    if (!message) return false;
+
+    const conversation = await this.conversationRepository.findOne({
+      where: { id: message.conversationId },
+    });
+
+    if (!conversation) return false;
+
+    const isParticipant = conversation.user1Id === userId || conversation.user2Id === userId;
+    if (!isParticipant) return false;
+
+    if (message.senderId !== userId) return false;
+
+    const result = await this.messageRepository.delete({ id: messageId });
+    const success = (result.affected ?? 0) > 0;
+    if (success) {
+      this.messagingGateway.emitMessageDeleted({
+        conversationId: message.conversationId,
+        messageId,
+      });
+    }
+    return success;
+  }
+
   private mapConversationToDto(c: ConversationTypeOrmEntity, currentUserId: string) {
     // Determine who is the "other" participant
     const isUser1 = c.user1Id === currentUserId;

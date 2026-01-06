@@ -85,6 +85,14 @@ export default function FullMessagingPanel() {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const lastTypingSentAtRef = useRef<number>(0);
+  const [newIncomingIndicator, setNewIncomingIndicator] = useState(false);
+  const newIncomingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -271,6 +279,9 @@ export default function FullMessagingPanel() {
         setMessages(prev => [...prev, message]);
 
         if (message.senderRole === 'client') {
+          setNewIncomingIndicator(true);
+          if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
+          newIncomingTimeoutRef.current = setTimeout(() => setNewIncomingIndicator(false), 2000);
           socket.emit('mark-read', { conversationId: message.conversationId });
           setConversations((prev) =>
             prev.map((c) => (c.id === message.conversationId ? { ...c, unreadCount: 0 } : c)),
@@ -287,6 +298,20 @@ export default function FullMessagingPanel() {
         }
         return { ...c, unreadCount: c.unreadCount + 1 };
       }));
+    });
+
+    socket.on('message-deleted', ({ conversationId, messageId }: { conversationId: string; messageId: string }) => {
+      if (selectedConversation && selectedConversation.id === conversationId) {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      }
+    });
+
+    socket.on('conversation-deleted', ({ conversationId }: { conversationId: string }) => {
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      if (selectedConversation?.id === conversationId) {
+        setSelectedConversation(null);
+        setMessages([]);
+      }
     });
 
     socket.on('conversation-claimed', ({ conversationId, advisorId, advisorName }) => {
@@ -325,6 +350,8 @@ export default function FullMessagingPanel() {
       socket.off('conversation-transferred');
       socket.off('user-typing');
       socket.off('messages-read');
+      socket.off('message-deleted');
+      socket.off('conversation-deleted');
     };
   }, [socket, isConnected, selectedConversation]);
 
@@ -659,9 +686,14 @@ export default function FullMessagingPanel() {
                     <ChevronLeft className="h-5 w-5" />
                   </button>
                   <div>
-                    <h3 className="text-lg font-semibold text-white">
-                      {selectedConversation.clientName}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-semibold text-white">
+                        {selectedConversation.clientName}
+                      </h3>
+                      {newIncomingIndicator && (
+                        <Badge tone="success">+1</Badge>
+                      )}
+                    </div>
                     {selectedConversation.clientEmail && (
                       <p className="text-sm text-zinc-400">{selectedConversation.clientEmail}</p>
                     )}
