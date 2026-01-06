@@ -91,6 +91,21 @@ export default function UniversalMessagingPanel() {
   }, []);
   const isClientRole = currentUserRole === 'client';
 
+  const accent =
+    currentUserRole === 'director'
+      ? {
+          tabActive: 'bg-amber-500/20 text-amber-400',
+          selectedConversation: 'border-amber-500/50 bg-amber-500/10',
+          userAvatar: 'bg-amber-500/20 text-amber-400',
+          ownMessage: 'bg-amber-500/20 text-amber-50',
+        }
+      : {
+          tabActive: 'bg-emerald-500/20 text-emerald-400',
+          selectedConversation: 'border-emerald-500/50 bg-emerald-500/10',
+          userAvatar: 'bg-emerald-500/20 text-emerald-400',
+          ownMessage: 'bg-emerald-500/20 text-emerald-50',
+        };
+
   const fetchConversations = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
@@ -478,7 +493,7 @@ export default function UniversalMessagingPanel() {
                 onClick={() => setActiveTab('conversations')}
                 className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'conversations'
-                    ? 'bg-emerald-500/20 text-emerald-400'
+                    ? accent.tabActive
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
@@ -489,7 +504,7 @@ export default function UniversalMessagingPanel() {
                 onClick={() => setActiveTab('search')}
                 className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'search'
-                    ? 'bg-emerald-500/20 text-emerald-400'
+                    ? accent.tabActive
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
@@ -500,7 +515,7 @@ export default function UniversalMessagingPanel() {
                 onClick={() => setActiveTab('users')}
                 className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'users'
-                    ? 'bg-emerald-500/20 text-emerald-400'
+                    ? accent.tabActive
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
@@ -533,7 +548,7 @@ export default function UniversalMessagingPanel() {
                         onClick={() => setSelectedConversation(conv)}
                         className={`cursor-pointer rounded-xl border p-3 transition ${
                           selectedConversation?.id === conv.id
-                            ? 'border-emerald-500/50 bg-emerald-500/10'
+                            ? accent.selectedConversation
                             : 'border-white/10 hover:border-white/20 hover:bg-white/5'
                         }`}
                       >
@@ -635,7 +650,7 @@ export default function UniversalMessagingPanel() {
                         className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
                       >
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                          <div className={`flex h-10 w-10 items-center justify-center rounded-full ${accent.userAvatar}`}>
                             {user.firstName[0]}
                             {user.lastName[0]}
                           </div>
@@ -735,7 +750,7 @@ export default function UniversalMessagingPanel() {
                       <div
                         className={`max-w-[70%] rounded-2xl px-4 py-2 ${
                           message.senderId === currentUserId
-                            ? 'bg-emerald-500/20 text-emerald-50'
+                            ? accent.ownMessage
                             : 'bg-white/10 text-white'
                         }`}
                       >

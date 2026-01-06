@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, Percent, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Users, Percent, TrendingUp, MessageSquare } from 'lucide-react';
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
 import ThemeToggle from '@/components/atoms/ThemeToggle';
 import DarkVeil from '@/components/DarkVeil';
@@ -13,6 +13,7 @@ import type { LucideIcon } from 'lucide-react';
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 	{ href: '/director', label: 'Tableau de bord', icon: LayoutDashboard },
 	{ href: '/director/accounts', label: 'Comptes clients', icon: Users },
+	{ href: '/director/messages', label: 'Messages', icon: MessageSquare },
 	{ href: '/director/savings-rate', label: 'Taux d\'épargne', icon: Percent },
 	{ href: '/director/stocks', label: 'Actions', icon: TrendingUp },
 ];
