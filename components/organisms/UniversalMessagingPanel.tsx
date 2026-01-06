@@ -442,48 +442,48 @@ export default function UniversalMessagingPanel() {
   };
 
   return (
-    <div className="h-[calc(100vh-200px)] min-h-[600px]">
+    <div className="flex h-[calc(100vh-200px)] min-h-[600px] min-h-0 flex-col">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white">Messages</h1>
         <p className="text-zinc-400">Échangez avec n&apos;importe quel utilisateur</p>
       </div>
 
-      <div className="flex h-full gap-4">
-        <div className="flex w-96 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+        <div className="flex w-full min-h-0 shrink-0 flex-col lg:w-96">
           <Card className="mb-4">
             <div className="flex gap-1">
               <button
                 onClick={() => setActiveTab('conversations')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'conversations'
                     ? 'bg-emerald-500/20 text-emerald-400'
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 <MessageSquare className="h-4 w-4" />
-                Conversations
+                <span className="min-w-0 truncate">Conversations</span>
               </button>
               <button
                 onClick={() => setActiveTab('search')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'search'
                     ? 'bg-emerald-500/20 text-emerald-400'
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 <Search className="h-4 w-4" />
-                Recherche
+                <span className="min-w-0 truncate">Recherche</span>
               </button>
               <button
                 onClick={() => setActiveTab('users')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'users'
                     ? 'bg-emerald-500/20 text-emerald-400'
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 <Users className="h-4 w-4" />
-                Utilisateurs
+                <span className="min-w-0 truncate">Utilisateurs</span>
               </button>
             </div>
           </Card>
@@ -515,16 +515,16 @@ export default function UniversalMessagingPanel() {
                             : 'border-white/10 hover:border-white/20 hover:bg-white/5'
                         }`}
                       >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
+                        <div className="flex min-w-0 items-start justify-between">
+                          <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-white">{conv.recipientName}</h3>
+                              <h3 className="truncate font-semibold text-white">{conv.recipientName}</h3>
                               {conv.unreadCount > 0 && (
                                 <Badge tone="success">{conv.unreadCount}</Badge>
                               )}
                             </div>
                             {conv.recipientEmail && (
-                              <p className="text-xs text-zinc-500">{conv.recipientEmail}</p>
+                              <p className="truncate text-xs text-zinc-500">{conv.recipientEmail}</p>
                             )}
                             <div className="mt-1 flex items-center gap-2">
                               {getRoleBadge(conv.recipientRole)}
@@ -569,16 +569,21 @@ export default function UniversalMessagingPanel() {
                     searchResults.map((user) => (
                       <div
                         key={user.id}
-                        className="flex items-center justify-between rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
+                        className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
                       >
-                        <div>
-                          <h3 className="font-semibold text-white">
+                        <div className="min-w-0">
+                          <h3 className="truncate font-semibold text-white">
                             {user.firstName} {user.lastName}
                           </h3>
-                          <p className="text-sm text-zinc-400">{user.email}</p>
+                          <p className="truncate text-sm text-zinc-400">{user.email}</p>
                           <div className="mt-1">{getRoleBadge(user.role)}</div>
                         </div>
-                        <Button variant="primary" size="sm" onClick={() => startConversation(user.id)}>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => startConversation(user.id)}
+                          className="shrink-0"
+                        >
                           <UserPlus className="mr-1 h-4 w-4" />
                           Contacter
                         </Button>
@@ -603,22 +608,27 @@ export default function UniversalMessagingPanel() {
                     users.map((user) => (
                       <div
                         key={user.id}
-                        className="flex items-center justify-between rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
+                        className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
                             {user.firstName[0]}
                             {user.lastName[0]}
                           </div>
-                          <div>
-                            <h3 className="font-semibold text-white">
+                          <div className="min-w-0">
+                            <h3 className="truncate font-semibold text-white">
                               {user.firstName} {user.lastName}
                             </h3>
-                            <p className="text-sm text-zinc-400">{user.email}</p>
+                            <p className="truncate text-sm text-zinc-400">{user.email}</p>
                             <div className="mt-1">{getRoleBadge(user.role)}</div>
                           </div>
                         </div>
-                        <Button variant="secondary" size="sm" onClick={() => startConversation(user.id)}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => startConversation(user.id)}
+                          className="shrink-0"
+                        >
                           <MessageSquare className="h-4 w-4" />
                         </Button>
                       </div>
@@ -630,20 +640,20 @@ export default function UniversalMessagingPanel() {
           </Card>
         </div>
 
-        <Card className="flex flex-1 flex-col">
+        <Card className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
           {selectedConversation ? (
             <>
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="flex min-w-0 items-center gap-3">
                   <button
                     onClick={() => setSelectedConversation(null)}
                     className="rounded-lg p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white lg:hidden"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-semibold text-white">
+                      <h3 className="truncate text-lg font-semibold text-white">
                         {selectedConversation.recipientName}
                       </h3>
                       {newIncomingIndicator && (
@@ -652,13 +662,13 @@ export default function UniversalMessagingPanel() {
                     </div>
                     <div className="flex items-center gap-2">
                       {selectedConversation.recipientEmail && (
-                        <p className="text-sm text-zinc-400">{selectedConversation.recipientEmail}</p>
+                        <p className="truncate text-sm text-zinc-400">{selectedConversation.recipientEmail}</p>
                       )}
                       {getRoleBadge(selectedConversation.recipientRole)}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   <Button
                     variant="secondary"
                     size="sm"
@@ -671,7 +681,7 @@ export default function UniversalMessagingPanel() {
                 </div>
               </div>
 
-              <div className="flex-1 space-y-3 overflow-y-auto py-4">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-4">
                 {isLoadingMessages ? (
                   <p className="text-center text-zinc-400">Chargement des messages...</p>
                 ) : messages.length === 0 ? (
@@ -697,7 +707,7 @@ export default function UniversalMessagingPanel() {
                           <span className="text-xs font-semibold opacity-80">{message.senderName}</span>
                           <span className="text-xs opacity-60">{formatTime(message.timestamp)}</span>
                         </div>
-                        <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                        <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
                         {message.senderId === currentUserId && (
                           <div className="mt-1 flex items-center justify-end gap-2 text-[11px] opacity-70">
                             <button
@@ -724,7 +734,7 @@ export default function UniversalMessagingPanel() {
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="flex gap-2 border-t border-white/10 pt-4">
+              <div className="flex min-w-0 gap-2 border-t border-white/10 pt-4">
                 <Input
                   type="text"
                   placeholder="Tapez votre message..."
@@ -747,7 +757,7 @@ export default function UniversalMessagingPanel() {
                       sendMessage();
                     }
                   }}
-                  className="flex-1"
+                  className="min-w-0 flex-1"
                 />
                 <Button variant="primary" onClick={sendMessage} disabled={!newMessage.trim()}>
                   <Send className="h-4 w-4" />

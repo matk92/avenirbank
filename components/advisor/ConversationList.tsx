@@ -50,16 +50,16 @@ export default function ConversationList({
     <Card
       key={conversation.id}
       hover
-      className="flex items-center justify-between gap-4"
+      className="flex min-w-0 items-center justify-between gap-4"
     >
-      <div className="flex flex-1 items-start gap-4">
+      <div className="flex min-w-0 flex-1 items-start gap-4">
         <div className="rounded-full bg-emerald-500/20 p-3">
           <MessageSquare className="h-5 w-5 text-emerald-400" />
         </div>
 
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2">
-            <h3 className="font-semibold text-white">{conversation.clientName}</h3>
+            <h3 className="truncate font-semibold text-white">{conversation.clientName}</h3>
             {conversation.unreadCount > 0 && (
               <Badge tone="warning">{conversation.unreadCount}</Badge>
             )}
@@ -93,7 +93,7 @@ export default function ConversationList({
         </div>
       </div>
 
-      <div>
+      <div className="shrink-0">
         {isPending ? (
           <Button
             variant="primary"
