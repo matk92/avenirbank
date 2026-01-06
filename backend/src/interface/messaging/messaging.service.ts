@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -198,6 +198,20 @@ export class MessagingService {
   }
 
   async getOrCreateConversation(userId1: string, userId2: string) {
+    if (!userId1 || !userId2 || userId1 === userId2) {
+      throw new BadRequestException('Invalid conversation participants');
+    }
+
+    const user1 = await this.userRepository.findOne({ where: { id: userId1 } });
+    const user2 = await this.userRepository.findOne({ where: { id: userId2 } });
+
+    if (!user1) throw new BadRequestException('User not found');
+    if (!user2 || user2.isBanned) throw new BadRequestException('Target user not found');
+
+    if (user1.role === UserRoleEnum.CLIENT && user2.role !== UserRoleEnum.ADVISOR) {
+      throw new ForbiddenException('Clients can only message advisors');
+    }
+
     // Check if conversation already exists (in either direction)
     let conversation = await this.conversationRepository.findOne({
       where: [
@@ -218,8 +232,20 @@ export class MessagingService {
     conversation.status = ConversationStatusEnum.ACTIVE;
     conversation.unreadCountUser1 = 0;
     conversation.unreadCountUser2 = 0;
-    conversation.clientId = userId1;
-    conversation.advisorId = userId2;
+
+    conversation.clientId =
+      user1.role === UserRoleEnum.CLIENT
+        ? userId1
+        : user2.role === UserRoleEnum.CLIENT
+          ? userId2
+          : userId1;
+    conversation.advisorId =
+      user1.role === UserRoleEnum.ADVISOR
+        ? userId1
+        : user2.role === UserRoleEnum.ADVISOR
+          ? userId2
+          : undefined;
+
     conversation.unreadCount = 0;
     
     await this.conversationRepository.save(conversation);

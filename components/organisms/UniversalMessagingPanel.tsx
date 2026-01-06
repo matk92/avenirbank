@@ -53,6 +53,7 @@ export default function UniversalMessagingPanel() {
 
   const [activeTab, setActiveTab] = useState<TabType>('conversations');
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [currentUserRole, setCurrentUserRole] = useState<string>('');
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
@@ -80,11 +81,15 @@ export default function UniversalMessagingPanel() {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setCurrentUserId(payload.sub);
+        if (payload.role) {
+          setCurrentUserRole(String(payload.role).toLowerCase());
+        }
       } catch (e) {
         console.error('Error parsing token:', e);
       }
     }
   }, []);
+  const isClientRole = currentUserRole === 'client';
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -130,14 +135,19 @@ export default function UniversalMessagingPanel() {
       });
       if (response.ok) {
         const data = await response.json();
-        setUsers(data);
+        const normalized = Array.isArray(data) ? data : [];
+        setUsers(
+          isClientRole
+            ? normalized.filter((u: User) => (u.role || '').toLowerCase() === 'advisor')
+            : normalized,
+        );
       }
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
       setIsLoadingUsers(false);
     }
-  }, []);
+  }, [isClientRole]);
 
   const searchUsers = useCallback(async (query: string) => {
     if (query.length < 2) {
@@ -148,23 +158,35 @@ export default function UniversalMessagingPanel() {
     setIsSearching(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(
-        `/api/messages/users/search?email=${encodeURIComponent(query)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const url = new URL('/api/messages/users/search', window.location.origin);
+      url.searchParams.set('email', query);
+      if (isClientRole) {
+        url.searchParams.set('role', 'advisor');
+      }
+      const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) {
         const data = await response.json();
-        setSearchResults(data);
+        const normalized = Array.isArray(data) ? data : [];
+        setSearchResults(
+          isClientRole
+            ? normalized.filter((u: User) => (u.role || '').toLowerCase() === 'advisor')
+            : normalized,
+        );
       }
     } catch (error) {
       console.error('Error searching users:', error);
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [isClientRole]);
 
   const startConversation = async (userId: string) => {
     try {
+      if (isClientRole) {
+        const target = [...searchResults, ...users].find((u) => u.id === userId);
+        const targetRole = (target?.role || '').toLowerCase();
+        if (targetRole && targetRole !== 'advisor') return;
+      }
       const token = localStorage.getItem('token');
       const response = await fetch('/api/messages/conversations', {
         method: 'POST',
@@ -483,7 +505,7 @@ export default function UniversalMessagingPanel() {
                 }`}
               >
                 <Users className="h-4 w-4" />
-                <span className="min-w-0 truncate">Utilisateurs</span>
+                <span className="min-w-0 truncate">{isClientRole ? 'Conseillers' : 'Utilisateurs'}</span>
               </button>
             </div>
           </Card>
@@ -578,15 +600,17 @@ export default function UniversalMessagingPanel() {
                           <p className="truncate text-sm text-zinc-400">{user.email}</p>
                           <div className="mt-1">{getRoleBadge(user.role)}</div>
                         </div>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => startConversation(user.id)}
-                          className="shrink-0"
-                        >
-                          <UserPlus className="mr-1 h-4 w-4" />
-                          Contacter
-                        </Button>
+                        {(!isClientRole || (user.role || '').toLowerCase() === 'advisor') && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => startConversation(user.id)}
+                            className="shrink-0"
+                          >
+                            <UserPlus className="mr-1 h-4 w-4" />
+                            Contacter
+                          </Button>
+                        )}
                       </div>
                     ))
                   )}
@@ -597,7 +621,7 @@ export default function UniversalMessagingPanel() {
             {activeTab === 'users' && (
               <div className="flex h-full flex-col">
                 <h3 className="mb-4 text-lg font-semibold text-white">
-                  Tous les utilisateurs ({users.length})
+                  {isClientRole ? 'Conseillers disponibles' : 'Tous les utilisateurs'} ({users.length})
                 </h3>
                 <div className="flex-1 space-y-2 overflow-y-auto">
                   {isLoadingUsers ? (
@@ -623,14 +647,26 @@ export default function UniversalMessagingPanel() {
                             <div className="mt-1">{getRoleBadge(user.role)}</div>
                           </div>
                         </div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => startConversation(user.id)}
-                          className="shrink-0"
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
+                        {isClientRole ? (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => startConversation(user.id)}
+                            className="shrink-0"
+                          >
+                            <UserPlus className="mr-1 h-4 w-4" />
+                            Contacter
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => startConversation(user.id)}
+                            className="shrink-0"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     ))
                   )}
