@@ -91,6 +91,13 @@ export default function UniversalMessagingPanel() {
   }, []);
   const isClientRole = currentUserRole === 'client';
 
+  const accentBadgeTone: 'success' | 'warning' | 'neutral' =
+    currentUserRole === 'director'
+      ? 'warning'
+      : currentUserRole === 'advisor'
+        ? 'success'
+        : 'neutral';
+
   const accent =
     currentUserRole === 'director'
       ? {
@@ -99,12 +106,19 @@ export default function UniversalMessagingPanel() {
           userAvatar: 'bg-amber-500/20 text-amber-400',
           ownMessage: 'bg-amber-500/20 text-amber-50',
         }
-      : {
-          tabActive: 'bg-emerald-500/20 text-emerald-400',
-          selectedConversation: 'border-emerald-500/50 bg-emerald-500/10',
-          userAvatar: 'bg-emerald-500/20 text-emerald-400',
-          ownMessage: 'bg-emerald-500/20 text-emerald-50',
-        };
+      : currentUserRole === 'advisor'
+        ? {
+            tabActive: 'bg-emerald-500/20 text-emerald-400',
+            selectedConversation: 'border-emerald-500/50 bg-emerald-500/10',
+            userAvatar: 'bg-emerald-500/20 text-emerald-400',
+            ownMessage: 'bg-emerald-500/20 text-emerald-50',
+          }
+        : {
+            tabActive: 'bg-white/10 text-white',
+            selectedConversation: 'border-white/20 bg-white/5',
+            userAvatar: 'bg-white/10 text-white',
+            ownMessage: 'bg-white/10 text-white',
+          };
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -557,7 +571,7 @@ export default function UniversalMessagingPanel() {
                             <div className="flex items-center gap-2">
                               <h3 className="truncate font-semibold text-white">{conv.recipientName}</h3>
                               {conv.unreadCount > 0 && (
-                                <Badge tone="success">{conv.unreadCount}</Badge>
+                                <Badge tone={accentBadgeTone}>{conv.unreadCount}</Badge>
                               )}
                             </div>
                             {conv.recipientEmail && (
@@ -708,7 +722,7 @@ export default function UniversalMessagingPanel() {
                         {selectedConversation.recipientName}
                       </h3>
                       {newIncomingIndicator && (
-                        <Badge tone="success">+1</Badge>
+                        <Badge tone={accentBadgeTone}>+1</Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
