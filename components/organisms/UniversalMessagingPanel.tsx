@@ -6,6 +6,7 @@ import Badge from '@/components/atoms/Badge';
 import Button from '@/components/atoms/Button';
 import Input from '@/components/atoms/Input';
 import { useWebSocket } from '@/lib/websocket-client';
+import { useMessaging } from '@/contexts/MessagingContext';
 import {
   MessageSquare,
   Send,
@@ -67,12 +68,17 @@ export default function UniversalMessagingPanel() {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const { socket, isConnected } = useWebSocket('/messaging');
+  const { refreshUnreadTotal } = useMessaging();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [typingRole, setTypingRole] = useState<string | null>(null);
   const lastTypingSentAtRef = useRef<number>(0);
   const [newIncomingIndicator, setNewIncomingIndicator] = useState(false);
   const newIncomingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [messageToast, setMessageToast] = useState<string | null>(null);
+  const messageToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
   useEffect(() => {
@@ -331,6 +337,9 @@ export default function UniversalMessagingPanel() {
 
     if (socket && isConnected) {
       socket.emit('mark-read', { conversationId });
+      setTimeout(() => {
+        void refreshUnreadTotal();
+      }, 150);
       return;
     }
 
@@ -340,10 +349,12 @@ export default function UniversalMessagingPanel() {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      void refreshUnreadTotal();
     } catch (error) {
       console.error('Error marking conversation as read:', error);
     }
-  }, [socket, isConnected, currentUserId]);
+  }, [socket, isConnected, currentUserId, refreshUnreadTotal]);
 
   useEffect(() => {
     fetchConversations();
@@ -353,6 +364,8 @@ export default function UniversalMessagingPanel() {
   useEffect(() => {
     if (selectedConversation) {
       fetchMessages(selectedConversation.id);
+      setIsTyping(false);
+      setTypingRole(null);
     }
   }, [selectedConversation, fetchMessages]);
 
@@ -386,6 +399,12 @@ export default function UniversalMessagingPanel() {
         }
       }
 
+      if (message.senderId !== currentUserId) {
+        setMessageToast('Vous avez un message en attente');
+        if (messageToastTimeoutRef.current) clearTimeout(messageToastTimeoutRef.current);
+        messageToastTimeoutRef.current = setTimeout(() => setMessageToast(null), 3500);
+      }
+
       setConversations((prev) =>
         prev.map((c) => {
           if (c.id !== message.conversationId) return c;
@@ -396,6 +415,15 @@ export default function UniversalMessagingPanel() {
           return { ...c, unreadCount: c.unreadCount + 1 };
         }),
       );
+    });
+
+    socket.on('message-notification', (payload: { conversationId?: string; message?: string }) => {
+      const conversationId = payload?.conversationId;
+      if (conversationId && selectedConversation?.id === conversationId) {
+        return;
+      }
+
+      fetchConversations();
     });
 
     socket.on('message-deleted', ({ conversationId, messageId }: { conversationId: string; messageId: string }) => {
@@ -412,11 +440,15 @@ export default function UniversalMessagingPanel() {
       }
     });
 
-    socket.on('user-typing', ({ conversationId }: { conversationId: string }) => {
+    socket.on('user-typing', ({ conversationId, role }: { conversationId: string; role?: string }) => {
       if (selectedConversation && conversationId === selectedConversation.id) {
         setIsTyping(true);
+        setTypingRole(role ? String(role).toLowerCase() : null);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000);
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsTyping(false);
+          setTypingRole(null);
+        }, 3000);
       }
     });
     socket.on('messages-read', (data: { conversationId: string; messageIds: string[]; readerId: string }) => {
@@ -427,16 +459,18 @@ export default function UniversalMessagingPanel() {
 
     return () => {
       socket.off('new-message');
+      socket.off('message-notification');
       socket.off('user-typing');
       socket.off('messages-read');
       socket.off('message-deleted');
       socket.off('conversation-deleted');
     };
-  }, [socket, isConnected, selectedConversation, currentUserId]);
+  }, [socket, isConnected, selectedConversation, currentUserId, fetchConversations]);
 
   useEffect(() => {
     return () => {
       if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
+      if (messageToastTimeoutRef.current) clearTimeout(messageToastTimeoutRef.current);
     };
   }, []);
 
@@ -494,6 +528,13 @@ export default function UniversalMessagingPanel() {
 
   return (
     <div className="flex h-[calc(100vh-200px)] min-h-[600px] min-h-0 flex-col">
+      {messageToast && (
+        <div className="pointer-events-none fixed right-4 top-20 z-[100] w-[min(420px,calc(100vw-2rem))]">
+          <div className="glass-panel pointer-events-auto rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white shadow-lg">
+            {messageToast}
+          </div>
+        </div>
+      )}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white">Messages</h1>
         <p className="text-zinc-400">Échangez avec n&apos;importe quel utilisateur</p>
@@ -792,7 +833,11 @@ export default function UniversalMessagingPanel() {
                 {isTyping && (
                   <div className="flex justify-start">
                     <div className="rounded-2xl bg-white/10 px-4 py-2 text-sm text-zinc-400">
-                      En train d&apos;écrire...
+                      {typingRole === 'director'
+                        ? 'Le directeur est en train d\'écrire...'
+                        : typingRole === 'advisor'
+                          ? 'Le conseiller est en train d\'écrire...'
+                          : 'En train d\'écrire...'}
                     </div>
                   </div>
                 )}

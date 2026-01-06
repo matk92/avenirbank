@@ -6,6 +6,7 @@ import { ConversationTypeOrmEntity, ConversationStatusEnum } from '@infrastructu
 import { MessageTypeOrmEntity } from '@infrastructure/database/entities/message.typeorm.entity';
 import { UserTypeOrmEntity, UserRoleEnum } from '@infrastructure/database/entities/user.typeorm.entity';
 import { MessagingGateway } from './messaging.gateway';
+import { NotificationsService } from '@interface/notifications/notifications.service';
 
 @Injectable()
 export class MessagingService {
@@ -17,6 +18,7 @@ export class MessagingService {
     @InjectRepository(UserTypeOrmEntity)
     private userRepository: Repository<UserTypeOrmEntity>,
     private messagingGateway: MessagingGateway,
+    private notificationsService: NotificationsService,
   ) {}
 
   async getConversationsForUser(userId: string) {
@@ -100,6 +102,9 @@ export class MessagingService {
 
     await this.messageRepository.save(message);
 
+    const recipientId = conversation.user1Id === senderId ? conversation.user2Id : conversation.user1Id;
+    await this.notificationsService.createNotification(recipientId, 'Vous avez un message en attente');
+
     if (conversation.user1Id === senderId) {
       await this.conversationRepository.update(
         { id: conversationId },
@@ -112,7 +117,7 @@ export class MessagingService {
       );
     }
 
-    return {
+    const dto = {
       id: message.id,
       conversationId: message.conversationId,
       senderId: message.senderId,
@@ -122,6 +127,13 @@ export class MessagingService {
       timestamp: message.createdAt,
       read: message.read,
     };
+    
+    this.messagingGateway.server?.to?.(`user:${recipientId}`)?.emit?.('message-notification', {
+      conversationId,
+      message: 'Vous avez un message en attente',
+    });
+
+    return dto;
   }
 
   async markMessagesAsRead(conversationId: string, userId: string) {

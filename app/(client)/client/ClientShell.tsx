@@ -6,7 +6,9 @@ import { LayoutDashboard, Wallet, PiggyBank, TrendingUp, Newspaper, MessageSquar
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
 import ThemeToggle from '@/components/atoms/ThemeToggle';
 import DarkVeil from '@/components/DarkVeil';
+import Badge from '@/components/atoms/Badge';
 import { useI18n } from '@/contexts/I18nContext';
+import { useMessaging } from '@/contexts/MessagingContext';
 import type { TranslationKey } from '@/lib/i18n';
 import { logout } from '@/lib/logout';
 import type { ReactNode } from 'react';
@@ -25,6 +27,7 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const { t, language } = useI18n();
+	const { unreadTotal } = useMessaging();
 
 	return (
 		<div className="relative min-h-screen bg-(--background) text-white">
@@ -66,6 +69,7 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 					{navItems.map((item) => {
 						const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 						const Icon = item.icon;
+						const isMessages = item.href === '/client/messages';
 						return (
 							<Link
 								key={item.href}
@@ -78,6 +82,16 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 							>
 								<Icon className={`h-4 w-4 ${active ? 'text-black' : 'text-white/60 group-hover:text-white'}`} />
 								<span>{t(item.labelKey)}</span>
+								{isMessages && unreadTotal > 0 && (
+									<Badge
+										tone="neutral"
+										className={`shrink-0 px-2 py-0.5 ${
+											active ? 'border-black/10 bg-black/10 text-black/80' : ''
+										}`}
+									>
+										{unreadTotal}
+									</Badge>
+								)}
 							</Link>
 						);
 					})}

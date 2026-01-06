@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import SectionTitle from '@/components/atoms/SectionTitle';
 import ActivityCard from '@/components/molecules/ActivityCard';
 import NotificationItem from '@/components/molecules/NotificationItem';
@@ -27,52 +27,60 @@ export default function ActivityFeed() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchInitialData = useCallback(async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const [activitiesRes, notificationsRes] = await Promise.all([
-        fetch('http://localhost:3001/activities', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch('http://localhost:3001/notifications', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-
-      if (activitiesRes.ok) {
-        const data = await activitiesRes.json();
-        setActivities(data);
-      }
-
-      if (notificationsRes.ok) {
-        const data = await notificationsRes.json();
-        setNotifications(data);
-      }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
     let activitySource: EventSource | null = null;
     let notificationSource: EventSource | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let reconnectActivityTimeout: ReturnType<typeof setTimeout> | null = null;
+    let reconnectNotificationTimeout: ReturnType<typeof setTimeout> | null = null;
+    const currentTokenRef = { current: null as string | null };
 
-    const connectActivitySSE = () => {
-      activitySource = new EventSource(`http://localhost:3001/sse/activities?token=${token}`);
+    const cleanup = () => {
+      if (reconnectActivityTimeout) {
+        clearTimeout(reconnectActivityTimeout);
+        reconnectActivityTimeout = null;
+      }
+      if (reconnectNotificationTimeout) {
+        clearTimeout(reconnectNotificationTimeout);
+        reconnectNotificationTimeout = null;
+      }
+
+      activitySource?.close();
+      notificationSource?.close();
+      activitySource = null;
+      notificationSource = null;
+    };
+
+    const fetchInitialData = async (token: string) => {
+      try {
+        const [activitiesRes, notificationsRes] = await Promise.all([
+          fetch(`${BACKEND_URL}/activities`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${BACKEND_URL}/notifications`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        if (activitiesRes.ok) {
+          const data = await activitiesRes.json();
+          setActivities(data);
+        }
+
+        if (notificationsRes.ok) {
+          const data = await notificationsRes.json();
+          setNotifications(data);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+
+    const connectActivitySSE = (token: string) => {
+      activitySource?.close();
+      activitySource = new EventSource(`${BACKEND_URL}/sse/activities?token=${token}`);
 
       activitySource.onmessage = (event) => {
         try {
@@ -87,12 +95,18 @@ export default function ActivityFeed() {
 
       activitySource.onerror = () => {
         activitySource?.close();
-        setTimeout(connectActivitySSE, 5000);
+        if (reconnectActivityTimeout) clearTimeout(reconnectActivityTimeout);
+        reconnectActivityTimeout = setTimeout(() => {
+          if (currentTokenRef.current === token) {
+            connectActivitySSE(token);
+          }
+        }, 5000);
       };
     };
 
-    const connectNotificationSSE = () => {
-      notificationSource = new EventSource(`http://localhost:3001/sse/notifications?token=${token}`);
+    const connectNotificationSSE = (token: string) => {
+      notificationSource?.close();
+      notificationSource = new EventSource(`${BACKEND_URL}/sse/notifications?token=${token}`);
 
       notificationSource.onmessage = (event) => {
         try {
@@ -107,16 +121,45 @@ export default function ActivityFeed() {
 
       notificationSource.onerror = () => {
         notificationSource?.close();
-        setTimeout(connectNotificationSSE, 5000);
+        if (reconnectNotificationTimeout) clearTimeout(reconnectNotificationTimeout);
+        reconnectNotificationTimeout = setTimeout(() => {
+          if (currentTokenRef.current === token) {
+            connectNotificationSSE(token);
+          }
+        }, 5000);
       };
     };
 
-    connectActivitySSE();
-    connectNotificationSSE();
+    const ensureConnected = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        if (currentTokenRef.current) {
+          currentTokenRef.current = null;
+          cleanup();
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      if (currentTokenRef.current === token) return;
+
+      currentTokenRef.current = token;
+      cleanup();
+      setIsLoading(true);
+      await fetchInitialData(token);
+      connectActivitySSE(token);
+      connectNotificationSSE(token);
+      setIsLoading(false);
+    };
+
+    void ensureConnected();
+    pollInterval = setInterval(() => {
+      void ensureConnected();
+    }, 1000);
 
     return () => {
-      activitySource?.close();
-      notificationSource?.close();
+      if (pollInterval) clearInterval(pollInterval);
+      cleanup();
     };
   }, []);
 
@@ -124,8 +167,10 @@ export default function ActivityFeed() {
     const token = localStorage.getItem('token');
     if (!token) return;
 
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+
     try {
-      await fetch(`http://localhost:3001/notifications/${id}/read`, {
+      await fetch(`${BACKEND_URL}/notifications/${id}/read`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });

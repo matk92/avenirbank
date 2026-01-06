@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ConversationTypeOrmEntity, ConversationStatusEnum } from '@infrastructure/database/entities/conversation.typeorm.entity';
 import { MessageTypeOrmEntity } from '@infrastructure/database/entities/message.typeorm.entity';
 import { UserTypeOrmEntity, UserRoleEnum } from '@infrastructure/database/entities/user.typeorm.entity';
+import { NotificationsService } from '@interface/notifications/notifications.service';
 
 const websocketCorsOrigins = (() => {
   const raw = process.env.FRONTEND_URL;
@@ -51,6 +52,7 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   constructor(
     private jwtService: JwtService,
+    private notificationsService: NotificationsService,
     @InjectRepository(ConversationTypeOrmEntity)
     private conversationRepository: Repository<ConversationTypeOrmEntity>,
     @InjectRepository(MessageTypeOrmEntity)
@@ -146,6 +148,10 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     await this.messageRepository.save(message);
 
+    const recipientId =
+      conversation.user1Id === client.user.sub ? conversation.user2Id : conversation.user1Id;
+    await this.notificationsService.createNotification(recipientId, 'Vous avez un message en attente');
+
     if (conversation.user1Id === client.user.sub) {
       await this.conversationRepository.update(
         { id: data.conversationId },
@@ -170,6 +176,10 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     };
 
     this.server.to(`conversation:${data.conversationId}`).emit('new-message', messagePayload);
+    this.server.to(`user:${recipientId}`).emit('message-notification', {
+      conversationId: data.conversationId,
+      message: 'Vous avez un message en attente',
+    });
   }
 
   @SubscribeMessage('claim-conversation')
@@ -271,6 +281,7 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     client.to(`conversation:${data.conversationId}`).emit('user-typing', {
       conversationId: data.conversationId,
       userId: client.user.sub,
+      role: client.user.role,
     });
   }
 

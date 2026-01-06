@@ -525,12 +525,15 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
         if (!res.ok) return;
         const data = await res.json();
         const notifications: Notification[] = Array.isArray(data)
-          ? data.map((n: any) => ({
-              id: String(n.id),
-              message: String(n.message),
-              createdAt: String(n.createdAt),
-              read: Boolean(n.read),
-            }))
+          ? (data as unknown[]).map((n) => {
+              const raw = n as Record<string, unknown>;
+              return {
+                id: String(raw.id ?? ''),
+                message: String(raw.message ?? ''),
+                createdAt: String(raw.createdAt ?? new Date().toISOString()),
+                read: Boolean(raw.read),
+              };
+            })
           : [];
 
         dispatch({ type: 'SET_NOTIFICATIONS', payload: { notifications } });
