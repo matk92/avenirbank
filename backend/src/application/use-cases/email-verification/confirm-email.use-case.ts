@@ -1,10 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import { UserPostgresRepository } from '../../../infrastructure/database/repositories/user.postgres.repository';
+import { IUserRepository } from '@domain/repositories/user.repository.interface';
 
-@Injectable()
 export class ConfirmEmailUseCase {
   constructor(
-    private readonly userRepository: UserPostgresRepository,
+    private readonly userRepository: IUserRepository,
   ) {}
 
   /**

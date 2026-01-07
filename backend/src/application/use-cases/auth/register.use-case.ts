@@ -1,10 +1,8 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
 import { hash } from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
 import { User, UserRole } from '@domain/entities/user.entity';
-import { UserPostgresRepository } from '@infrastructure/database/repositories/user.postgres.repository';
-import { EmailService } from '@infrastructure/services/email.service';
+import { IUserRepository } from '@domain/repositories/user.repository.interface';
 
 /**
  * Register Use Case - Application Layer
@@ -27,11 +25,14 @@ export interface RegisterOutput {
   role: UserRole;
 }
 
-@Injectable()
+export interface IEmailService {
+  sendVerificationEmail(email: string, token: string, name: string): Promise<void>;
+}
+
 export class RegisterUseCase {
   constructor(
-    private readonly userRepository: UserPostgresRepository,
-    private readonly emailService: EmailService,
+    private readonly userRepository: IUserRepository,
+    private readonly emailService: IEmailService,
   ) {}
 
   async execute(input: RegisterInput): Promise<RegisterOutput> {
@@ -41,7 +42,7 @@ export class RegisterUseCase {
     // Check if user already exists
     const existingUser = await this.userRepository.findByEmail(input.email);
     if (existingUser) {
-      throw new BadRequestException('User with this email already exists');
+      throw new Error('User with this email already exists');
     }
 
     // Hash password
@@ -85,23 +86,23 @@ export class RegisterUseCase {
 
   private validateInput(input: RegisterInput): void {
     if (!input.email || !input.password || !input.firstName || !input.lastName) {
-      throw new BadRequestException('All fields are required');
+      throw new Error('All fields are required');
     }
 
     if (input.email.length > 255) {
-      throw new BadRequestException('Email is too long');
+      throw new Error('Email is too long');
     }
 
     if (input.password.length < 8) {
-      throw new BadRequestException('Password must be at least 8 characters');
+      throw new Error('Password must be at least 8 characters');
     }
 
     if (input.firstName.length < 2 || input.firstName.length > 100) {
-      throw new BadRequestException('First name must be between 2 and 100 characters');
+      throw new Error('First name must be between 2 and 100 characters');
     }
 
     if (input.lastName.length < 2 || input.lastName.length > 100) {
-      throw new BadRequestException('Last name must be between 2 and 100 characters');
+      throw new Error('Last name must be between 2 and 100 characters');
     }
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,9 +12,9 @@ import SectionTitle from '@/components/atoms/SectionTitle';
 import FormField from '@/components/molecules/FormField';
 import Modal from '@/components/molecules/Modal';
 import AccountSummaryCard from '@/components/molecules/AccountSummaryCard';
-import { useClientData } from '@/contexts/ClientDataContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { formatCurrency } from '@/lib/format';
+import { getAccounts, createAccount, depositMoney, transferMoney, renameAccount } from '@/lib/api/accounts';
 import type { Language, TranslationKey } from '@/lib/i18n';
 import type { Account } from '@/lib/types';
 
@@ -40,9 +40,14 @@ const transferSchema = z
     path: ['toAccountId'],
   });
 
+const depositSchema = z.object({
+  amount: z.coerce.number().gt(0, 'form.error.required'),
+});
+
 type CreateAccountFormValues = z.infer<typeof createAccountSchema>;
 type RenameAccountFormValues = z.infer<typeof renameAccountSchema>;
 type TransferFormValues = z.infer<typeof transferSchema>;
+type DepositFormValues = z.infer<typeof depositSchema>;
 
 function getAccountStatusTone(account: Account): 'success' | 'warning' | 'neutral' {
   if (account.status === 'closed') {
@@ -55,12 +60,16 @@ function getAccountStatusTone(account: Account): 'success' | 'warning' | 'neutra
 }
 
 export default function AccountManagementPanel() {
-  const { state, createAccount, renameAccount, closeAccount, transfer } = useClientData();
   const { t, language } = useI18n();
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [dragSourceAccountId, setDragSourceAccountId] = useState<string | null>(null);
   const [dragOverAccountId, setDragOverAccountId] = useState<string | null>(null);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [selectedAccountForDeposit, setSelectedAccountForDeposit] = useState<string | null>(null);
 
   const createAccountForm = useForm<CreateAccountFormValues>({
     resolver: zodResolver(createAccountSchema),
@@ -77,35 +86,127 @@ export default function AccountManagementPanel() {
     defaultValues: { fromAccountId: '', toAccountId: '', amount: 0, reference: '' },
   });
 
-  const availableAccounts = state.accounts;
-  const activeAccounts = availableAccounts.filter((account) => account.status === 'active');
-
-  const handleCreateAccount = createAccountForm.handleSubmit((values: CreateAccountFormValues) => {
-    createAccount({
-      name: values.name,
-      type: values.type,
-      initialDeposit: values.initialDeposit,
-    });
-    createAccountForm.reset();
+  const depositForm = useForm<DepositFormValues>({
+    resolver: zodResolver(depositSchema),
+    defaultValues: { amount: 0 },
   });
 
-  const handleRenameSubmit = renameForm.handleSubmit((values: RenameAccountFormValues) => {
+  const availableAccounts = accounts;
+  const activeAccounts = accounts.filter((account) => account.status === 'active');
+
+  // Load accounts on component mount
+  useEffect(() => {
+    async function loadAccounts() {
+      try {
+        setLoading(true);
+        setError(null);
+        const accountsData = await getAccounts();
+        setAccounts(accountsData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load accounts');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadAccounts();
+  }, []);
+
+  // Reset transfer form when accounts change to ensure dropdowns are populated
+  useEffect(() => {
+    if (accounts.length > 0) {
+      transferForm.reset({
+        fromAccountId: '',
+        toAccountId: '',
+        amount: 0,
+        reference: ''
+      });
+    }
+  }, [accounts, transferForm]);
+
+  const handleCreateAccount = createAccountForm.handleSubmit(async (values: CreateAccountFormValues) => {
+    try {
+      setError(null);
+      const newAccount = await createAccount({
+        name: values.name,
+        type: values.type,
+        initialDeposit: values.initialDeposit,
+      });
+      setAccounts(prev => [...prev, newAccount]);
+      createAccountForm.reset();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create account');
+    }
+  });
+
+  const handleRenameSubmit = renameForm.handleSubmit(async (values: RenameAccountFormValues) => {
     if (!editingAccountId) {
       return;
     }
-    renameAccount({ id: editingAccountId, name: values.name });
-    setEditingAccountId(null);
+    try {
+      setError(null);
+      const updatedAccount = await renameAccount(editingAccountId, values.name);
+      
+      // Update account in the list
+      setAccounts(prev => prev.map(account => 
+        account.id === updatedAccount.id ? updatedAccount : account
+      ));
+      
+      setEditingAccountId(null);
+      renameForm.reset();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to rename account');
+    }
   });
 
-  const handleTransfer = transferForm.handleSubmit((values: TransferFormValues) => {
-    transfer({
-      fromAccountId: values.fromAccountId,
-      toAccountId: values.toAccountId,
-      amount: values.amount,
-      reference: values.reference,
-    });
-    transferForm.reset();
-    setIsTransferModalOpen(false);
+  const handleTransfer = transferForm.handleSubmit(async (values: TransferFormValues) => {
+    try {
+      setError(null);
+      const result = await transferMoney({
+        fromAccountId: values.fromAccountId,
+        toAccountId: values.toAccountId,
+        amount: values.amount,
+        description: values.reference,
+      });
+      
+      // Update accounts with new balances
+      setAccounts(prev => prev.map(account => {
+        if (account.id === result.fromAccount.id) return result.fromAccount;
+        if (account.id === result.toAccount.id) return result.toAccount;
+        return account;
+      }));
+      
+      transferForm.reset();
+      setIsTransferModalOpen(false);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to transfer money';
+      
+      if (errorMessage.startsWith('INSUFFICIENT_FUNDS:')) {
+        setError('Insufficient funds: The source account does not have enough balance for this transfer.');
+      } else {
+        setError(errorMessage);
+      }
+    }
+  });
+
+  const handleDeposit = depositForm.handleSubmit(async (values: DepositFormValues) => {
+    if (!selectedAccountForDeposit) return;
+    
+    try {
+      setError(null);
+      const updatedAccount = await depositMoney(selectedAccountForDeposit, values.amount);
+      
+      // Update account with new balance
+      setAccounts(prev => prev.map(account => 
+        account.id === updatedAccount.id ? updatedAccount : account
+      ));
+      
+      depositForm.reset();
+      setIsDepositModalOpen(false);
+      setSelectedAccountForDeposit(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to deposit money');
+    }
   });
 
   const handleDragStart = (accountId: string) => (event: React.DragEvent<HTMLDivElement>) => {
@@ -151,8 +252,114 @@ export default function AccountManagementPanel() {
     renameForm.reset({ name: account.name });
   };
 
+  const openDepositModal = (accountId: string) => {
+    setSelectedAccountForDeposit(accountId);
+    setIsDepositModalOpen(true);
+    depositForm.reset();
+  };
+
+  const handleCloseAccount = async (accountId: string) => {
+    // Note: Backend doesn't have close account endpoint yet
+    // In a real implementation, you'd call a close account API endpoint here
+    try {
+      setError(null);
+      // For now, just update local state to mark as closed
+      setAccounts(prev => prev.map(account => 
+        account.id === accountId ? { ...account, status: 'closed' as const } : account
+      ));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to close account');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading accounts...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-12">
+      {error && (
+        <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            </div>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto flex-shrink-0 text-red-400 hover:text-red-600"
+            >
+              <span className="sr-only">Dismiss</span>
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </Card>
+      )}
+
+      <Modal
+        open={isDepositModalOpen}
+        title="Deposit Money"
+        onClose={() => setIsDepositModalOpen(false)}
+      >
+        <Card className="border-white/15 bg-black/70 p-6">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-white/60">Deposit Money</p>
+              <p className="mt-1 text-sm text-white/70">
+                {language === 'fr'
+                  ? 'Renseignez le montant à déposer.'
+                  : 'Enter the amount to deposit.'}
+              </p>
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setIsDepositModalOpen(false)}>
+              {t('actions.cancel')}
+            </Button>
+          </div>
+
+          <form onSubmit={handleDeposit} className="grid gap-5">
+            <FormField label="Amount" htmlFor="deposit-amount">
+              <Input
+                id="deposit-amount"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                {...depositForm.register('amount', { valueAsNumber: true })}
+                hasError={Boolean(depositForm.formState.errors.amount)}
+              />
+              {depositForm.formState.errors.amount && (
+                <p className="text-xs text-[#ff4f70]">
+                  {t(
+                    (depositForm.formState.errors.amount.message as TranslationKey | undefined) ??
+                      'form.error.required',
+                  )}
+                </p>
+              )}
+            </FormField>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <Button type="button" variant="secondary" onClick={() => setIsDepositModalOpen(false)}>
+                {t('actions.cancel')}
+              </Button>
+              <Button type="submit">Deposit</Button>
+            </div>
+          </form>
+        </Card>
+      </Modal>
+
       <Modal
         open={isTransferModalOpen}
         title={t('accounts.transferTitle')}
@@ -449,10 +656,13 @@ export default function AccountManagementPanel() {
                 actions={
                   account.status === 'active' ? (
                     <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => openDepositModal(account.id)}>
+                        Deposit
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => beginRename(account)}>
                         {t('accounts.rename')}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => closeAccount({ id: account.id })}>
+                      <Button variant="ghost" size="sm" onClick={() => handleCloseAccount(account.id)}>
                         {t('accounts.delete')}
                       </Button>
                     </div>
