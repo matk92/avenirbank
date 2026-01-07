@@ -10,6 +10,7 @@ import { StocksModule } from '@interface/stocks/stocks.module';
 import { LoansModule } from '@interface/loans/loans.module';
 import { MessagingModule } from '@interface/messaging/messaging.module';
 import { NotificationsModule } from '@interface/notifications/notifications.module';
+import { DirectorModule } from '@interface/director/director.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { NotificationsModule } from '@interface/notifications/notifications.modu
     TransactionsModule,
     SavingsModule,
     StocksModule,
+    DirectorModule,
     LoansModule,
     MessagingModule,
     NotificationsModule,

@@ -1,5 +1,15 @@
 export type UserRole = 'client' | 'advisor' | 'director';
 
+export interface DirectorClient {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  isBanned: boolean;
+  isEmailConfirmed: boolean;
+  createdAt: Date;
+}
+
 export interface BankAccount {
   id: string;
   clientId: string;

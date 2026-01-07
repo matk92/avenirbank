@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AccountManagementForm from '@/components/director/AccountManagementForm';
 import { useDirectorData } from '@/contexts/DirectorDataContext';
@@ -11,7 +10,7 @@ export default function CreateAccountPage() {
 	const router = useRouter();
 	const { addAccount } = useDirectorData();
 
-	const handleSubmit = async (data: any) => {
+	const handleSubmit = async (data: Record<string, unknown>) => {
 		try {
 			const token = localStorage.getItem('token');
 			const response = await fetch('/api/director/accounts', {
