@@ -16,6 +16,15 @@ import { JwtService } from '@nestjs/jwt';
 import { NotificationsService } from './notifications.service';
 import { filter } from 'rxjs/operators';
 
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    sub: string;
+    email: string;
+    role: string;
+  };
+}
+
 @Controller()
 export class NotificationsController {
   constructor(
@@ -25,7 +34,7 @@ export class NotificationsController {
 
   @Get('notifications')
   @UseGuards(JwtAuthGuard)
-  async getNotifications(@Req() req: any) {
+  async getNotifications(@Req() req: AuthenticatedRequest) {
     return this.notificationsService.getNotificationsForUser(req.user.sub);
   }
 
