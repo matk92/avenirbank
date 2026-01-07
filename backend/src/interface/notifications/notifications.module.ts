@@ -6,6 +6,7 @@ import { NotificationsService } from './notifications.service';
 import { NotificationTypeOrmEntity } from '@infrastructure/database/entities/notification.typeorm.entity';
 import { ActivityTypeOrmEntity } from '@infrastructure/database/entities/activity.typeorm.entity';
 import { UserTypeOrmEntity } from '@infrastructure/database/entities/user.typeorm.entity';
+import { PushModule } from '@interface/push/push.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { UserTypeOrmEntity } from '@infrastructure/database/entities/user.typeor
       ActivityTypeOrmEntity,
       UserTypeOrmEntity,
     ]),
+    PushModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? 'dev-jwt-secret',
       signOptions: { expiresIn: '7d' },

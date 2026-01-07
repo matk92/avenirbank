@@ -5,7 +5,9 @@ import Card from '@/components/atoms/Card';
 import Badge from '@/components/atoms/Badge';
 import Button from '@/components/atoms/Button';
 import Input from '@/components/atoms/Input';
+import Modal from '@/components/molecules/Modal';
 import { useWebSocket } from '@/lib/websocket-client';
+import { useMessaging } from '@/contexts/MessagingContext';
 import {
   MessageSquare,
   Send,
@@ -46,6 +48,26 @@ interface Conversation {
   createdAt: Date;
   updatedAt: Date;
 }
+interface MessageGroup {
+  id: string;
+  name: string;
+  memberCount: number;
+  unreadCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface GroupMessage {
+  id: string;
+  room: string;
+  author: {
+    id: string;
+    name: string;
+    role: string;
+  };
+  content: string;
+  createdAt: string;
+}
 
 type TabType = 'conversations' | 'search' | 'users';
 
@@ -53,22 +75,46 @@ export default function UniversalMessagingPanel() {
 
   const [activeTab, setActiveTab] = useState<TabType>('conversations');
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [currentUserRole, setCurrentUserRole] = useState<string>('');
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [groups, setGroups] = useState<MessageGroup[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<MessageGroup | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [newGroupMessage, setNewGroupMessage] = useState('');
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const { socket, isConnected } = useWebSocket('/messaging');
+  const { socket: groupSocket, isConnected: isGroupConnected } = useWebSocket('/group-chat');
+  const { refreshUnreadTotal } = useMessaging();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const groupMessagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const groupTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [typingRole, setTypingRole] = useState<string | null>(null);
+  const [groupTypingUser, setGroupTypingUser] = useState<string | null>(null);
+  const lastTypingSentAtRef = useRef<number>(0);
+  const lastGroupTypingSentAtRef = useRef<number>(0);
+  const [newIncomingIndicator, setNewIncomingIndicator] = useState(false);
+  const newIncomingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [messageToast, setMessageToast] = useState<string | null>(null);
+  const messageToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [createGroupName, setCreateGroupName] = useState('');
+  const [createGroupMemberIds, setCreateGroupMemberIds] = useState<string[]>([]);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
 
   useEffect(() => {
@@ -77,11 +123,44 @@ export default function UniversalMessagingPanel() {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setCurrentUserId(payload.sub);
+        if (payload.role) {
+          setCurrentUserRole(String(payload.role).toLowerCase());
+        }
       } catch (e) {
         console.error('Error parsing token:', e);
       }
     }
   }, []);
+  const isClientRole = currentUserRole === 'client';
+
+  const accentBadgeTone: 'success' | 'warning' | 'neutral' =
+    currentUserRole === 'director'
+      ? 'warning'
+      : currentUserRole === 'advisor'
+        ? 'success'
+        : 'neutral';
+
+  const accent =
+    currentUserRole === 'director'
+      ? {
+          tabActive: 'bg-amber-500/20 text-amber-400',
+          selectedConversation: 'border-amber-500/50 bg-amber-500/10',
+          userAvatar: 'bg-amber-500/20 text-amber-400',
+          ownMessage: 'bg-amber-500/20 text-amber-50',
+        }
+      : currentUserRole === 'advisor'
+        ? {
+            tabActive: 'bg-emerald-500/20 text-emerald-400',
+            selectedConversation: 'border-emerald-500/50 bg-emerald-500/10',
+            userAvatar: 'bg-emerald-500/20 text-emerald-400',
+            ownMessage: 'bg-emerald-500/20 text-emerald-50',
+          }
+        : {
+            tabActive: 'bg-white/10 text-white',
+            selectedConversation: 'border-white/20 bg-white/5',
+            userAvatar: 'bg-white/10 text-white',
+            ownMessage: 'bg-white/10 text-white',
+          };
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -99,6 +178,30 @@ export default function UniversalMessagingPanel() {
       setIsLoadingConversations(false);
     }
   }, []);
+
+  const fetchGroups = useCallback(async () => {
+    if (isClientRole) {
+      setGroups([]);
+      setIsLoadingGroups(false);
+      return;
+    }
+
+    setIsLoadingGroups(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/messages/groups', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setGroups(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+    } finally {
+      setIsLoadingGroups(false);
+    }
+  }, [isClientRole]);
 
   const fetchMessages = useCallback(async (conversationId: string) => {
     setIsLoadingMessages(true);
@@ -127,14 +230,19 @@ export default function UniversalMessagingPanel() {
       });
       if (response.ok) {
         const data = await response.json();
-        setUsers(data);
+        const normalized = Array.isArray(data) ? data : [];
+        setUsers(
+          isClientRole
+            ? normalized.filter((u: User) => (u.role || '').toLowerCase() === 'advisor')
+            : normalized,
+        );
       }
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
       setIsLoadingUsers(false);
     }
-  }, []);
+  }, [isClientRole]);
 
   const searchUsers = useCallback(async (query: string) => {
     if (query.length < 2) {
@@ -145,23 +253,35 @@ export default function UniversalMessagingPanel() {
     setIsSearching(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(
-        `/api/messages/users/search?email=${encodeURIComponent(query)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const url = new URL('/api/messages/users/search', window.location.origin);
+      url.searchParams.set('email', query);
+      if (isClientRole) {
+        url.searchParams.set('role', 'advisor');
+      }
+      const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) {
         const data = await response.json();
-        setSearchResults(data);
+        const normalized = Array.isArray(data) ? data : [];
+        setSearchResults(
+          isClientRole
+            ? normalized.filter((u: User) => (u.role || '').toLowerCase() === 'advisor')
+            : normalized,
+        );
       }
     } catch (error) {
       console.error('Error searching users:', error);
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [isClientRole]);
 
   const startConversation = async (userId: string) => {
     try {
+      if (isClientRole) {
+        const target = [...searchResults, ...users].find((u) => u.id === userId);
+        const targetRole = (target?.role || '').toLowerCase();
+        if (targetRole && targetRole !== 'advisor') return;
+      }
       const token = localStorage.getItem('token');
       const response = await fetch('/api/messages/conversations', {
         method: 'POST',
@@ -216,16 +336,111 @@ export default function UniversalMessagingPanel() {
     setNewMessage('');
   };
 
+  const deleteConversation = async (conversationId: string) => {
+    const confirmed = window.confirm(
+      'Supprimer cette conversation ? Tous les messages seront supprimés.',
+    );
+    if (!confirmed) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/messages/conversations/${conversationId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        console.error('Error deleting conversation:', await response.text());
+        return;
+      }
+
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      if (selectedConversation?.id === conversationId) {
+        setSelectedConversation(null);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    const confirmed = window.confirm('Retirer ce message ?');
+    if (!confirmed) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/messages/messages/${messageId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        console.error('Error deleting message:', await response.text());
+        return;
+      }
+
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    }
+  };
+
+  const markSelectedConversationAsRead = useCallback(async (conversationId: string) => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c)),
+    );
+
+    setMessages((prev) =>
+      prev.map((m) => (m.conversationId === conversationId && m.senderId !== currentUserId ? { ...m, read: true } : m)),
+    );
+
+    if (socket && isConnected) {
+      socket.emit('mark-read', { conversationId });
+      setTimeout(() => {
+        void refreshUnreadTotal();
+      }, 150);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/messages/conversations/${conversationId}/read`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      void refreshUnreadTotal();
+    } catch (error) {
+      console.error('Error marking conversation as read:', error);
+    }
+  }, [socket, isConnected, currentUserId, refreshUnreadTotal]);
+
   useEffect(() => {
     fetchConversations();
+    fetchGroups();
     fetchUsers();
-  }, [fetchConversations, fetchUsers]);
+  }, [fetchConversations, fetchGroups, fetchUsers]);
+
+  useEffect(() => {
+    if (currentUserRole) {
+      fetchGroups();
+    }
+  }, [currentUserRole, fetchGroups]);
 
   useEffect(() => {
     if (selectedConversation) {
       fetchMessages(selectedConversation.id);
+      setIsTyping(false);
+      setTypingRole(null);
     }
   }, [selectedConversation, fetchMessages]);
+
+  useEffect(() => {
+    if (!selectedGroup) return;
+    setGroupMessages([]);
+    setGroupTypingUser(null);
+  }, [selectedGroup]);
 
   useEffect(() => {
     const debounce = setTimeout(() => {
@@ -245,43 +460,191 @@ export default function UniversalMessagingPanel() {
     socket.on('new-message', (message: Message) => {
       if (selectedConversation && message.conversationId === selectedConversation.id) {
         setMessages((prev) => [...prev, message]);
+        if (message.senderId !== currentUserId) {
+          setNewIncomingIndicator(true);
+          if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
+          newIncomingTimeoutRef.current = setTimeout(() => setNewIncomingIndicator(false), 2000);
+          socket.emit('mark-read', { conversationId: message.conversationId });
+          setConversations((prev) =>
+            prev.map((c) => (c.id === message.conversationId ? { ...c, unreadCount: 0 } : c)),
+          );
+          return;
+        }
       }
+
+      if (message.senderId !== currentUserId) {
+        setMessageToast('Vous avez un message en attente');
+        if (messageToastTimeoutRef.current) clearTimeout(messageToastTimeoutRef.current);
+        messageToastTimeoutRef.current = setTimeout(() => setMessageToast(null), 3500);
+      }
+
       setConversations((prev) =>
-        prev.map((c) =>
-          c.id === message.conversationId && message.senderId !== currentUserId
-            ? { ...c, unreadCount: c.unreadCount + 1 }
-            : c
-        )
+        prev.map((c) => {
+          if (c.id !== message.conversationId) return c;
+          if (message.senderId === currentUserId) return c;
+          if (selectedConversation && selectedConversation.id === message.conversationId) {
+            return { ...c, unreadCount: 0 };
+          }
+          return { ...c, unreadCount: c.unreadCount + 1 };
+        }),
       );
     });
 
-    socket.on('user-typing', ({ conversationId }: { conversationId: string }) => {
+    socket.on('message-notification', (payload: { conversationId?: string; message?: string }) => {
+      const conversationId = payload?.conversationId;
+      if (conversationId && selectedConversation?.id === conversationId) {
+        return;
+      }
+
+      fetchConversations();
+    });
+
+    socket.on('message-deleted', ({ conversationId, messageId }: { conversationId: string; messageId: string }) => {
+      if (selectedConversation && selectedConversation.id === conversationId) {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      }
+    });
+
+    socket.on('conversation-deleted', ({ conversationId }: { conversationId: string }) => {
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      if (selectedConversation?.id === conversationId) {
+        setSelectedConversation(null);
+        setMessages([]);
+      }
+    });
+
+    socket.on('user-typing', ({ conversationId, role }: { conversationId: string; role?: string }) => {
       if (selectedConversation && conversationId === selectedConversation.id) {
         setIsTyping(true);
+        setTypingRole(role ? String(role).toLowerCase() : null);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000);
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsTyping(false);
+          setTypingRole(null);
+        }, 3000);
       }
+    });
+    socket.on('messages-read', (data: { conversationId: string; messageIds: string[]; readerId: string }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.conversationId === data.conversationId && data.messageIds.includes(m.id) ? { ...m, read: true } : m)),
+      );
     });
 
     return () => {
       socket.off('new-message');
+      socket.off('message-notification');
       socket.off('user-typing');
+      socket.off('messages-read');
+      socket.off('message-deleted');
+      socket.off('conversation-deleted');
     };
-  }, [socket, isConnected, selectedConversation, currentUserId]);
+  }, [socket, isConnected, selectedConversation, currentUserId, fetchConversations]);
+
+  useEffect(() => {
+    if (!groupSocket || !isGroupConnected) return;
+
+    groupSocket.on('group-message', (message: GroupMessage) => {
+      const room = message?.room;
+      const groupId = typeof room === 'string' && room.startsWith('group:') ? room.slice('group:'.length) : null;
+
+      if (selectedGroup && groupId === selectedGroup.id) {
+        setGroupMessages((prev) => [...prev, message]);
+        if (message.author?.id !== currentUserId) {
+          const token = localStorage.getItem('token');
+          void fetch(`/api/messages/groups/${selectedGroup.id}/read`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          setGroups((prev) => prev.map((g) => (g.id === selectedGroup.id ? { ...g, unreadCount: 0 } : g)));
+        }
+        return;
+      }
+
+      if (groupId) {
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.id === groupId
+              ? { ...g, unreadCount: g.unreadCount + 1, updatedAt: new Date(message.createdAt) }
+              : g,
+          ),
+        );
+        setMessageToast('Vous avez un message de groupe en attente');
+        if (messageToastTimeoutRef.current) clearTimeout(messageToastTimeoutRef.current);
+        messageToastTimeoutRef.current = setTimeout(() => setMessageToast(null), 3500);
+      }
+    });
+
+    groupSocket.on('group-messages-history', (history: GroupMessage[]) => {
+      setGroupMessages(Array.isArray(history) ? history : []);
+    });
+
+    groupSocket.on('user-typing', ({ userName }: { userId: string; userName: string }) => {
+      setGroupTypingUser(userName);
+      if (groupTypingTimeoutRef.current) clearTimeout(groupTypingTimeoutRef.current);
+      groupTypingTimeoutRef.current = setTimeout(() => setGroupTypingUser(null), 3000);
+    });
+
+    groupSocket.on('group-message-notification', ({ groupId, message }: { groupId?: string; message?: string }) => {
+      if (!groupId) return;
+      if (selectedGroup?.id === groupId) return;
+      setMessageToast(message || 'Vous avez un message de groupe en attente');
+      if (messageToastTimeoutRef.current) clearTimeout(messageToastTimeoutRef.current);
+      messageToastTimeoutRef.current = setTimeout(() => setMessageToast(null), 3500);
+      fetchGroups();
+    });
+
+    return () => {
+      groupSocket.off('group-message');
+      groupSocket.off('group-messages-history');
+      groupSocket.off('user-typing');
+      groupSocket.off('group-message-notification');
+    };
+  }, [groupSocket, isGroupConnected, selectedGroup, currentUserId, fetchGroups]);
+
+  useEffect(() => {
+    return () => {
+      if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
+      if (messageToastTimeoutRef.current) clearTimeout(messageToastTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!socket || !isConnected || !selectedConversation) return;
 
     socket.emit('join-conversation', { conversationId: selectedConversation.id });
+    markSelectedConversationAsRead(selectedConversation.id);
 
     return () => {
       socket.emit('leave-conversation', { conversationId: selectedConversation.id });
     };
-  }, [socket, isConnected, selectedConversation]);
+  }, [socket, isConnected, selectedConversation, markSelectedConversationAsRead]);
+
+  useEffect(() => {
+    if (!groupSocket || !isGroupConnected || !selectedGroup) return;
+
+    const room = `group:${selectedGroup.id}`;
+    groupSocket.emit('join-group', room);
+    groupSocket.emit('get-group-messages', room);
+
+    const token = localStorage.getItem('token');
+    void fetch(`/api/messages/groups/${selectedGroup.id}/read`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setGroups((prev) => prev.map((g) => (g.id === selectedGroup.id ? { ...g, unreadCount: 0 } : g)));
+
+    return () => {
+      groupSocket.emit('leave-group', room);
+    };
+  }, [groupSocket, isGroupConnected, selectedGroup]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    groupMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [groupMessages]);
 
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString('fr-FR', {
@@ -320,49 +683,139 @@ export default function UniversalMessagingPanel() {
     return <Badge tone={colors[role] || 'neutral'}>{labels[role] || role}</Badge>;
   };
 
+  const toggleCreateGroupMember = (userId: string) => {
+    setCreateGroupMemberIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
+
+  const createGroup = async () => {
+    if (isClientRole) return;
+    const name = createGroupName.trim();
+    if (name.length < 2) return;
+    if (createGroupMemberIds.length < 1) return;
+
+    setIsCreatingGroup(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/messages/groups', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, memberIds: createGroupMemberIds }),
+      });
+
+      if (!response.ok) {
+        console.error('Error creating group:', await response.text());
+        return;
+      }
+
+      const group: MessageGroup = await response.json();
+      setGroups((prev) => {
+        const next = [group, ...prev.filter((g) => g.id !== group.id)];
+        return next.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      });
+
+      setSelectedConversation(null);
+      setMessages([]);
+      setSelectedGroup(group);
+      setIsCreateGroupOpen(false);
+      setCreateGroupName('');
+      setCreateGroupMemberIds([]);
+      setActiveTab('conversations');
+    } catch (error) {
+      console.error('Error creating group:', error);
+    } finally {
+      setIsCreatingGroup(false);
+    }
+  };
+
+  const sendGroupMessage = async () => {
+    if (!newGroupMessage.trim() || !selectedGroup) return;
+    const content = newGroupMessage.trim();
+
+    if (groupSocket && isGroupConnected) {
+      groupSocket.emit('send-group-message', {
+        room: `group:${selectedGroup.id}`,
+        content,
+      });
+      setNewGroupMessage('');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/messages/groups/${selectedGroup.id}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content }),
+      });
+      if (response.ok) {
+        const message: GroupMessage = await response.json();
+        setGroupMessages((prev) => [...prev, message]);
+      }
+    } catch (error) {
+      console.error('Error sending group message:', error);
+    } finally {
+      setNewGroupMessage('');
+    }
+  };
+
   return (
-    <div className="h-[calc(100vh-200px)] min-h-[600px]">
+    <div className="flex h-[calc(100vh-200px)] min-h-[600px] min-h-0 flex-col">
+      {messageToast && (
+        <div className="pointer-events-none fixed right-4 top-20 z-[100] w-[min(420px,calc(100vw-2rem))]">
+          <div className="glass-panel pointer-events-auto rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white shadow-lg">
+            {messageToast}
+          </div>
+        </div>
+      )}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white">Messages</h1>
         <p className="text-zinc-400">Échangez avec n&apos;importe quel utilisateur</p>
       </div>
 
-      <div className="flex h-full gap-4">
-        <div className="flex w-96 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+        <div className="flex w-full min-h-0 shrink-0 flex-col lg:w-96">
           <Card className="mb-4">
             <div className="flex gap-1">
               <button
                 onClick={() => setActiveTab('conversations')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'conversations'
-                    ? 'bg-emerald-500/20 text-emerald-400'
+                    ? accent.tabActive
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 <MessageSquare className="h-4 w-4" />
-                Conversations
+                <span className="min-w-0 truncate">Conversations</span>
               </button>
               <button
                 onClick={() => setActiveTab('search')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'search'
-                    ? 'bg-emerald-500/20 text-emerald-400'
+                    ? accent.tabActive
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 <Search className="h-4 w-4" />
-                Recherche
+                <span className="min-w-0 truncate">Recherche</span>
               </button>
               <button
                 onClick={() => setActiveTab('users')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'users'
-                    ? 'bg-emerald-500/20 text-emerald-400'
+                    ? accent.tabActive
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 <Users className="h-4 w-4" />
-                Utilisateurs
+                <span className="min-w-0 truncate">{isClientRole ? 'Conseillers' : 'Utilisateurs'}</span>
               </button>
             </div>
           </Card>
@@ -370,51 +823,114 @@ export default function UniversalMessagingPanel() {
           <Card className="flex-1 overflow-hidden">
             {activeTab === 'conversations' && (
               <div className="flex h-full flex-col">
-                <h3 className="mb-4 text-lg font-semibold text-white">
-                  Mes conversations ({conversations.length})
-                </h3>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="min-w-0 truncate text-lg font-semibold text-white">
+                    Mes messages ({conversations.length + (isClientRole ? 0 : groups.length)})
+                  </h3>
+                  {!isClientRole && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setIsCreateGroupOpen(true)}
+                      className="shrink-0"
+                    >
+                      <Users className="mr-1 h-4 w-4" />
+                      Créer un groupe
+                    </Button>
+                  )}
+                </div>
 
                 <div className="flex-1 space-y-2 overflow-y-auto">
-                  {isLoadingConversations ? (
+                  {isLoadingConversations || (!isClientRole && isLoadingGroups) ? (
                     <p className="text-center text-zinc-400">Chargement...</p>
-                  ) : conversations.length === 0 ? (
+                  ) : conversations.length === 0 && (isClientRole || groups.length === 0) ? (
                     <div className="text-center text-zinc-500">
                       <MessageSquare className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                      <p>Aucune conversation</p>
-                      <p className="text-sm">Commencez par rechercher un utilisateur</p>
+                      <p>Aucun message</p>
+                      <p className="text-sm">Commencez par contacter un utilisateur ou créer un groupe</p>
                     </div>
                   ) : (
-                    conversations.map((conv) => (
-                      <div
-                        key={conv.id}
-                        onClick={() => setSelectedConversation(conv)}
-                        className={`cursor-pointer rounded-xl border p-3 transition ${
-                          selectedConversation?.id === conv.id
-                            ? 'border-emerald-500/50 bg-emerald-500/10'
-                            : 'border-white/10 hover:border-white/20 hover:bg-white/5'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-white">{conv.recipientName}</h3>
-                              {conv.unreadCount > 0 && (
-                                <Badge tone="success">{conv.unreadCount}</Badge>
-                              )}
+                    (
+                      [
+                        ...conversations.map((conv) => ({ type: 'conversation' as const, updatedAt: conv.updatedAt, conv })),
+                        ...(!isClientRole
+                          ? groups.map((group) => ({ type: 'group' as const, updatedAt: group.updatedAt, group }))
+                          : []),
+                      ]
+                        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                        .map((item) => {
+                          if (item.type === 'conversation') {
+                            const conv = item.conv;
+                            return (
+                              <div
+                                key={`conv-${conv.id}`}
+                                onClick={() => {
+                                  setSelectedGroup(null);
+                                  setGroupMessages([]);
+                                  setSelectedConversation(conv);
+                                }}
+                                className={`cursor-pointer rounded-xl border p-3 transition ${
+                                  selectedConversation?.id === conv.id
+                                    ? accent.selectedConversation
+                                    : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+                                }`}
+                              >
+                                <div className="flex min-w-0 items-start justify-between">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <h3 className="truncate font-semibold text-white">{conv.recipientName}</h3>
+                                      {conv.unreadCount > 0 && (
+                                        <Badge tone={accentBadgeTone}>{conv.unreadCount}</Badge>
+                                      )}
+                                    </div>
+                                    {conv.recipientEmail && (
+                                      <p className="truncate text-xs text-zinc-500">{conv.recipientEmail}</p>
+                                    )}
+                                    <div className="mt-1 flex items-center gap-2">
+                                      {getRoleBadge(conv.recipientRole)}
+                                      <span className="text-xs text-zinc-500">{formatDate(conv.updatedAt)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          const group = item.group;
+                          const isSelected = selectedGroup?.id === group.id;
+                          return (
+                            <div
+                              key={`group-${group.id}`}
+                              onClick={() => {
+                                setSelectedConversation(null);
+                                setMessages([]);
+                                setSelectedGroup(group);
+                              }}
+                              className={`cursor-pointer rounded-xl border p-3 transition ${
+                                isSelected
+                                  ? accent.selectedConversation
+                                  : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+                              }`}
+                            >
+                              <div className="flex min-w-0 items-start justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="truncate font-semibold text-white">{group.name}</h3>
+                                    <Badge tone="neutral">Groupe</Badge>
+                                    {group.unreadCount > 0 && (
+                                      <Badge tone={accentBadgeTone}>{group.unreadCount}</Badge>
+                                    )}
+                                  </div>
+                                  <div className="mt-1 flex items-center gap-2">
+                                    <span className="text-xs text-zinc-500">{group.memberCount} membres</span>
+                                    <span className="text-xs text-zinc-500">{formatDate(group.updatedAt)}</span>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                            {conv.recipientEmail && (
-                              <p className="text-xs text-zinc-500">{conv.recipientEmail}</p>
-                            )}
-                            <div className="mt-1 flex items-center gap-2">
-                              {getRoleBadge(conv.recipientRole)}
-                              <span className="text-xs text-zinc-500">
-                                {formatDate(conv.updatedAt)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
+                          );
+                        })
+                    )
                   )}
                 </div>
               </div>
@@ -448,19 +964,26 @@ export default function UniversalMessagingPanel() {
                     searchResults.map((user) => (
                       <div
                         key={user.id}
-                        className="flex items-center justify-between rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
+                        className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
                       >
-                        <div>
-                          <h3 className="font-semibold text-white">
+                        <div className="min-w-0">
+                          <h3 className="truncate font-semibold text-white">
                             {user.firstName} {user.lastName}
                           </h3>
-                          <p className="text-sm text-zinc-400">{user.email}</p>
+                          <p className="truncate text-sm text-zinc-400">{user.email}</p>
                           <div className="mt-1">{getRoleBadge(user.role)}</div>
                         </div>
-                        <Button variant="primary" size="sm" onClick={() => startConversation(user.id)}>
-                          <UserPlus className="mr-1 h-4 w-4" />
-                          Contacter
-                        </Button>
+                        {(!isClientRole || (user.role || '').toLowerCase() === 'advisor') && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => startConversation(user.id)}
+                            className="shrink-0"
+                          >
+                            <UserPlus className="mr-1 h-4 w-4" />
+                            Contacter
+                          </Button>
+                        )}
                       </div>
                     ))
                   )}
@@ -471,7 +994,7 @@ export default function UniversalMessagingPanel() {
             {activeTab === 'users' && (
               <div className="flex h-full flex-col">
                 <h3 className="mb-4 text-lg font-semibold text-white">
-                  Tous les utilisateurs ({users.length})
+                  {isClientRole ? 'Conseillers disponibles' : 'Tous les utilisateurs'} ({users.length})
                 </h3>
                 <div className="flex-1 space-y-2 overflow-y-auto">
                   {isLoadingUsers ? (
@@ -482,24 +1005,41 @@ export default function UniversalMessagingPanel() {
                     users.map((user) => (
                       <div
                         key={user.id}
-                        className="flex items-center justify-between rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
+                        className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className={`flex h-10 w-10 items-center justify-center rounded-full ${accent.userAvatar}`}>
                             {user.firstName[0]}
                             {user.lastName[0]}
                           </div>
-                          <div>
-                            <h3 className="font-semibold text-white">
+                          <div className="min-w-0">
+                            <h3 className="truncate font-semibold text-white">
                               {user.firstName} {user.lastName}
                             </h3>
-                            <p className="text-sm text-zinc-400">{user.email}</p>
+                            <p className="truncate text-sm text-zinc-400">{user.email}</p>
                             <div className="mt-1">{getRoleBadge(user.role)}</div>
                           </div>
                         </div>
-                        <Button variant="secondary" size="sm" onClick={() => startConversation(user.id)}>
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
+                        {isClientRole ? (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => startConversation(user.id)}
+                            className="shrink-0"
+                          >
+                            <UserPlus className="mr-1 h-4 w-4" />
+                            Contacter
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => startConversation(user.id)}
+                            className="shrink-0"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     ))
                   )}
@@ -509,35 +1049,48 @@ export default function UniversalMessagingPanel() {
           </Card>
         </div>
 
-        <Card className="flex flex-1 flex-col">
+        <Card className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
           {selectedConversation ? (
             <>
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="flex min-w-0 items-center gap-3">
                   <button
                     onClick={() => setSelectedConversation(null)}
                     className="rounded-lg p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white lg:hidden"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">
-                      {selectedConversation.recipientName}
-                    </h3>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-lg font-semibold text-white">
+                        {selectedConversation.recipientName}
+                      </h3>
+                      {newIncomingIndicator && (
+                        <Badge tone={accentBadgeTone}>+1</Badge>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       {selectedConversation.recipientEmail && (
-                        <p className="text-sm text-zinc-400">{selectedConversation.recipientEmail}</p>
+                        <p className="truncate text-sm text-zinc-400">{selectedConversation.recipientEmail}</p>
                       )}
                       {getRoleBadge(selectedConversation.recipientRole)}
                     </div>
                   </div>
                 </div>
-                {!isConnected && (
-                  <Badge tone="warning">Hors ligne</Badge>
-                )}
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => deleteConversation(selectedConversation.id)}
+                  >
+                    <X className="h-4 w-4" />
+                    Supprimer
+                  </Button>
+                  {!isConnected && <Badge tone="warning">Hors ligne</Badge>}
+                </div>
               </div>
 
-              <div className="flex-1 space-y-3 overflow-y-auto py-4">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-4">
                 {isLoadingMessages ? (
                   <p className="text-center text-zinc-400">Chargement des messages...</p>
                 ) : messages.length === 0 ? (
@@ -555,7 +1108,7 @@ export default function UniversalMessagingPanel() {
                       <div
                         className={`max-w-[70%] rounded-2xl px-4 py-2 ${
                           message.senderId === currentUserId
-                            ? 'bg-emerald-500/20 text-emerald-50'
+                            ? accent.ownMessage
                             : 'bg-white/10 text-white'
                         }`}
                       >
@@ -563,7 +1116,19 @@ export default function UniversalMessagingPanel() {
                           <span className="text-xs font-semibold opacity-80">{message.senderName}</span>
                           <span className="text-xs opacity-60">{formatTime(message.timestamp)}</span>
                         </div>
-                        <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                        <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                        {message.senderId === currentUserId && (
+                          <div className="mt-1 flex items-center justify-end gap-2 text-[11px] opacity-70">
+                            <button
+                              type="button"
+                              onClick={() => deleteMessage(message.id)}
+                              className="underline underline-offset-2 hover:opacity-100"
+                            >
+                              Retirer
+                            </button>
+                            <span>{message.read ? 'Lu' : 'Envoyé'}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -571,28 +1136,141 @@ export default function UniversalMessagingPanel() {
                 {isTyping && (
                   <div className="flex justify-start">
                     <div className="rounded-2xl bg-white/10 px-4 py-2 text-sm text-zinc-400">
-                      En train d&apos;écrire...
+                      {typingRole === 'director'
+                        ? 'Le directeur est en train d\'écrire...'
+                        : typingRole === 'advisor'
+                          ? 'Le conseiller est en train d\'écrire...'
+                          : 'En train d\'écrire...'}
                     </div>
                   </div>
                 )}
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="flex gap-2 border-t border-white/10 pt-4">
+              <div className="flex min-w-0 gap-2 border-t border-white/10 pt-4">
                 <Input
                   type="text"
                   placeholder="Tapez votre message..."
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewMessage(value);
+
+                    if (socket && isConnected && selectedConversation && value) {
+                      const now = Date.now();
+                      if (now - lastTypingSentAtRef.current > 800) {
+                        lastTypingSentAtRef.current = now;
+                        socket.emit('typing', { conversationId: selectedConversation.id });
+                      }
+                    }
+                  }}
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       sendMessage();
                     }
                   }}
-                  className="flex-1"
+                  className="min-w-0 flex-1"
                 />
                 <Button variant="primary" onClick={sendMessage} disabled={!newMessage.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </>
+          ) : selectedGroup ? (
+            <>
+              <div className="flex min-w-0 items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <button
+                    onClick={() => setSelectedGroup(null)}
+                    className="rounded-lg p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white lg:hidden"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-lg font-semibold text-white">{selectedGroup.name}</h3>
+                      <Badge tone="neutral">Groupe</Badge>
+                    </div>
+                    <p className="truncate text-sm text-zinc-400">{selectedGroup.memberCount} membres</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {!isGroupConnected && <Badge tone="warning">Hors ligne</Badge>}
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-4">
+                {groupMessages.length === 0 ? (
+                  <p className="text-center text-zinc-500">Aucun message. Envoyez le premier message !</p>
+                ) : (
+                  groupMessages.map((message) => {
+                    const isMine = message.author?.id === currentUserId;
+                    const authorRole = String(message.author?.role ?? '').toLowerCase();
+                    const isDirector = authorRole === 'director';
+                    const time = new Date(message.createdAt).toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+                    return (
+                      <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                        <div
+                          className={`max-w-[70%] rounded-2xl px-4 py-2 ${
+                            isMine
+                              ? accent.ownMessage
+                              : isDirector
+                                ? 'border-l-4 border-amber-500 bg-amber-50/5 dark:bg-amber-900/20 text-white'
+                                : 'bg-white/10 text-white'
+                          }`}
+                        >
+                          <div className="mb-1 flex items-center gap-2">
+                            <span className="text-xs font-semibold opacity-80">{message.author?.name}</span>
+                            {isDirector && <Badge tone="warning">Directeur</Badge>}
+                            <span className="text-xs opacity-60">{time}</span>
+                          </div>
+                          <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+
+                {groupTypingUser && (
+                  <div className="flex justify-start">
+                    <div className="rounded-2xl bg-white/10 px-4 py-2 text-sm text-zinc-400">
+                      {groupTypingUser} est en train d'écrire...
+                    </div>
+                  </div>
+                )}
+                <div ref={groupMessagesEndRef} />
+              </div>
+
+              <div className="flex min-w-0 gap-2 border-t border-white/10 pt-4">
+                <Input
+                  type="text"
+                  placeholder="Tapez votre message..."
+                  value={newGroupMessage}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewGroupMessage(value);
+
+                    if (groupSocket && isGroupConnected && selectedGroup && value) {
+                      const now = Date.now();
+                      if (now - lastGroupTypingSentAtRef.current > 800) {
+                        lastGroupTypingSentAtRef.current = now;
+                        groupSocket.emit('typing', { room: `group:${selectedGroup.id}` });
+                      }
+                    }
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendGroupMessage();
+                    }
+                  }}
+                  className="min-w-0 flex-1"
+                />
+                <Button variant="primary" onClick={sendGroupMessage} disabled={!newGroupMessage.trim()}>
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
@@ -607,6 +1285,83 @@ export default function UniversalMessagingPanel() {
           )}
         </Card>
       </div>
+
+      <Modal open={isCreateGroupOpen} title="Créer un groupe" onClose={() => setIsCreateGroupOpen(false)}>
+        <Card>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Créer un groupe</h2>
+            <button
+              type="button"
+              onClick={() => setIsCreateGroupOpen(false)}
+              className="rounded-lg p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="mb-1 block text-sm text-zinc-300">Nom du groupe</label>
+              <Input
+                value={createGroupName}
+                onChange={(e) => setCreateGroupName(e.target.value)}
+                placeholder="Ex: Projet Crédit"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm text-zinc-300">Membres (conseillers + directeur)</label>
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 p-3">
+                {users
+                  .filter((u) => ['advisor', 'director'].includes(String(u.role || '').toLowerCase()))
+                  .map((u) => {
+                    const checked = createGroupMemberIds.includes(u.id);
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => toggleCreateGroupMember(u.id)}
+                        className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition ${
+                          checked ? 'bg-white/10' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-white">
+                            {u.firstName} {u.lastName}
+                          </p>
+                          <p className="truncate text-xs text-zinc-500">{u.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getRoleBadge(u.role)}
+                          <Badge tone={checked ? 'success' : 'neutral'}>{checked ? 'Ajouté' : 'Ajouter'}</Badge>
+                        </div>
+                      </button>
+                    );
+                  })}
+                {users.filter((u) => ['advisor', 'director'].includes(String(u.role || '').toLowerCase())).length === 0 && (
+                  <p className="text-sm text-zinc-400">Aucun membre disponible</p>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-zinc-500">
+                Vous êtes ajouté automatiquement au groupe.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="secondary" onClick={() => setIsCreateGroupOpen(false)}>
+                Annuler
+              </Button>
+              <Button
+                variant="primary"
+                onClick={createGroup}
+                disabled={isCreatingGroup || createGroupName.trim().length < 2 || createGroupMemberIds.length < 1}
+              >
+                {isCreatingGroup ? 'Création...' : 'Créer'}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </Modal>
     </div>
   );
 }

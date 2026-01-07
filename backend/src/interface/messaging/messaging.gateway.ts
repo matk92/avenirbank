@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ConversationTypeOrmEntity, ConversationStatusEnum } from '@infrastructure/database/entities/conversation.typeorm.entity';
 import { MessageTypeOrmEntity } from '@infrastructure/database/entities/message.typeorm.entity';
 import { UserTypeOrmEntity, UserRoleEnum } from '@infrastructure/database/entities/user.typeorm.entity';
+import { NotificationsService } from '@interface/notifications/notifications.service';
 
 const websocketCorsOrigins = (() => {
   const raw = process.env.FRONTEND_URL;
@@ -51,6 +52,7 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   constructor(
     private jwtService: JwtService,
+    private notificationsService: NotificationsService,
     @InjectRepository(ConversationTypeOrmEntity)
     private conversationRepository: Repository<ConversationTypeOrmEntity>,
     @InjectRepository(MessageTypeOrmEntity)
@@ -146,6 +148,10 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     await this.messageRepository.save(message);
 
+    const recipientId =
+      conversation.user1Id === client.user.sub ? conversation.user2Id : conversation.user1Id;
+    await this.notificationsService.createNotification(recipientId, 'Vous avez un message en attente');
+
     if (conversation.user1Id === client.user.sub) {
       await this.conversationRepository.update(
         { id: data.conversationId },
@@ -170,6 +176,10 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     };
 
     this.server.to(`conversation:${data.conversationId}`).emit('new-message', messagePayload);
+    this.server.to(`user:${recipientId}`).emit('message-notification', {
+      conversationId: data.conversationId,
+      message: 'Vous avez un message en attente',
+    });
   }
 
   @SubscribeMessage('claim-conversation')
@@ -271,7 +281,65 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     client.to(`conversation:${data.conversationId}`).emit('user-typing', {
       conversationId: data.conversationId,
       userId: client.user.sub,
+      role: client.user.role,
     });
+  }
+
+  @SubscribeMessage('mark-read')
+  async handleMarkRead(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { conversationId: string },
+  ) {
+    const conversation = await this.conversationRepository.findOne({
+      where: { id: data.conversationId },
+    });
+
+    if (!conversation) return;
+
+    const isParticipant =
+      conversation.user1Id === client.user.sub || conversation.user2Id === client.user.sub;
+    if (!isParticipant) return;
+
+    const otherUserId = conversation.user1Id === client.user.sub ? conversation.user2Id : conversation.user1Id;
+
+    const unreadMessages = await this.messageRepository.find({
+      where: {
+        conversationId: data.conversationId,
+        senderId: otherUserId,
+        read: false,
+      },
+      select: ['id'],
+    });
+
+    const messageIds = unreadMessages.map((m) => m.id);
+
+    if (messageIds.length > 0) {
+      await this.messageRepository.update(
+        {
+          conversationId: data.conversationId,
+          senderId: otherUserId,
+          read: false,
+        },
+        { read: true },
+      );
+    }
+
+    if (conversation.user1Id === client.user.sub) {
+      await this.conversationRepository.update({ id: data.conversationId }, { unreadCountUser1: 0 });
+    } else {
+      await this.conversationRepository.update({ id: data.conversationId }, { unreadCountUser2: 0 });
+    }
+
+    if (messageIds.length === 0) return;
+
+    const payload = {
+      conversationId: data.conversationId,
+      messageIds,
+      readerId: client.user.sub,
+    };
+
+    this.server.to(`conversation:${data.conversationId}`).emit('messages-read', payload);
+    this.server.to(`user:${otherUserId}`).emit('messages-read', payload);
   }
 
   async notifyNewConversation(conversation: ConversationTypeOrmEntity, clientName: string) {
@@ -283,5 +351,16 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       unreadCount: conversation.unreadCount,
       createdAt: conversation.createdAt,
     });
+  }
+
+  emitMessageDeleted(input: { conversationId: string; messageId: string }) {
+    this.server.to(`conversation:${input.conversationId}`).emit('message-deleted', input);
+  }
+
+  emitConversationDeleted(input: { conversationId: string; user1Id: string; user2Id: string }) {
+    this.server.to(`user:${input.user1Id}`).emit('conversation-deleted', { conversationId: input.conversationId });
+    this.server.to(`user:${input.user2Id}`).emit('conversation-deleted', { conversationId: input.conversationId });
+    // Et ceux qui regardent déjà la conversation
+    this.server.to(`conversation:${input.conversationId}`).emit('conversation-deleted', { conversationId: input.conversationId });
   }
 }

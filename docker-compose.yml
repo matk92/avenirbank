@@ -31,13 +31,16 @@ services:
       - DATABASE_URL=postgresql://avenir:password@postgres:5432/avenirbank
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=dev-jwt-secret
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:dev@avenirbank.local}
     depends_on:
       - postgres
       - redis
     volumes:
       - ./backend:/app
       - /app/node_modules
-    command: sh -c "npm run seed && npm run dev"
+    command: sh -c "npm install && npm run seed && npm run dev"
 
   # PostgreSQL Database
   postgres:

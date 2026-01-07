@@ -13,6 +13,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { GroupMessageTypeOrmEntity } from '@infrastructure/database/entities/group-message.typeorm.entity';
+import { MessageGroupTypeOrmEntity } from '@infrastructure/database/entities/message-group.typeorm.entity';
+import { MessageGroupMemberTypeOrmEntity } from '@infrastructure/database/entities/message-group-member.typeorm.entity';
 import { UserTypeOrmEntity, UserRoleEnum } from '@infrastructure/database/entities/user.typeorm.entity';
 
 const websocketCorsOrigins = (() => {
@@ -54,9 +56,30 @@ export class GroupChatGateway implements OnGatewayConnection, OnGatewayDisconnec
     private jwtService: JwtService,
     @InjectRepository(GroupMessageTypeOrmEntity)
     private groupMessageRepository: Repository<GroupMessageTypeOrmEntity>,
+    @InjectRepository(MessageGroupTypeOrmEntity)
+    private messageGroupRepository: Repository<MessageGroupTypeOrmEntity>,
+    @InjectRepository(MessageGroupMemberTypeOrmEntity)
+    private messageGroupMemberRepository: Repository<MessageGroupMemberTypeOrmEntity>,
     @InjectRepository(UserTypeOrmEntity)
     private userRepository: Repository<UserTypeOrmEntity>,
   ) {}
+
+  private extractGroupId(room: string) {
+    if (!room) return null;
+    if (!room.startsWith('group:')) return null;
+    const groupId = room.slice('group:'.length);
+    return groupId || null;
+  }
+
+  private async ensureMember(room: string, userId: string) {
+    const groupId = this.extractGroupId(room);
+    if (!groupId) return false;
+
+    const membership = await this.messageGroupMemberRepository.findOne({
+      where: { groupId, userId },
+    });
+    return Boolean(membership);
+  }
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
@@ -84,6 +107,7 @@ export class GroupChatGateway implements OnGatewayConnection, OnGatewayDisconnec
         firstName: user.firstName,
         lastName: user.lastName,
       };
+      client.join(`user:${payload.sub}`);
     } catch {
       client.disconnect();
     }
@@ -108,6 +132,8 @@ export class GroupChatGateway implements OnGatewayConnection, OnGatewayDisconnec
     @MessageBody() room: string,
   ) {
     if (!client.user) return;
+    const allowed = await this.ensureMember(room, client.user.sub);
+    if (!allowed) return;
 
     client.join(room);
 
@@ -145,6 +171,9 @@ export class GroupChatGateway implements OnGatewayConnection, OnGatewayDisconnec
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() room: string,
   ) {
+    if (!client.user) return;
+    const allowed = await this.ensureMember(room, client.user.sub);
+    if (!allowed) return;
     const messages = await this.groupMessageRepository.find({
       where: { room },
       order: { createdAt: 'ASC' },
@@ -153,6 +182,7 @@ export class GroupChatGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     const formattedMessages = messages.map((m: GroupMessageTypeOrmEntity) => ({
       id: m.id,
+      room: m.room,
       author: {
         id: m.authorId,
         name: m.authorName,
@@ -171,6 +201,8 @@ export class GroupChatGateway implements OnGatewayConnection, OnGatewayDisconnec
     @MessageBody() data: { room: string; content: string },
   ) {
     if (!client.user) return;
+    const allowed = await this.ensureMember(data.room, client.user.sub);
+    if (!allowed) return;
 
     const message = new GroupMessageTypeOrmEntity();
     message.id = uuidv4();
@@ -181,9 +213,14 @@ export class GroupChatGateway implements OnGatewayConnection, OnGatewayDisconnec
     message.content = data.content;
 
     await this.groupMessageRepository.save(message);
+    const groupId = this.extractGroupId(data.room);
+    if (groupId) {
+      await this.messageGroupRepository.update({ id: groupId }, { updatedAt: () => 'CURRENT_TIMESTAMP' });
+    }
 
     const messagePayload = {
       id: message.id,
+      room: message.room,
       author: {
         id: message.authorId,
         name: message.authorName,
@@ -194,6 +231,17 @@ export class GroupChatGateway implements OnGatewayConnection, OnGatewayDisconnec
     };
 
     this.server.to(data.room).emit('group-message', messagePayload);
+
+    if (groupId) {
+      const members = await this.messageGroupMemberRepository.find({ where: { groupId } });
+      for (const member of members) {
+        if (member.userId === client.user.sub) continue;
+        this.server.to(`user:${member.userId}`).emit('group-message-notification', {
+          groupId,
+          message: 'Vous avez un message de groupe en attente',
+        });
+      }
+    }
   }
 
   @SubscribeMessage('typing')
@@ -202,10 +250,13 @@ export class GroupChatGateway implements OnGatewayConnection, OnGatewayDisconnec
     @MessageBody() data: { room: string },
   ) {
     if (!client.user) return;
+    this.ensureMember(data.room, client.user.sub).then((allowed) => {
+      if (!allowed) return;
 
-    client.to(data.room).emit('user-typing', {
-      userId: client.user.sub,
-      userName: `${client.user.firstName} ${client.user.lastName}`,
+      client.to(data.room).emit('user-typing', {
+        userId: client.user.sub,
+        userName: `${client.user.firstName} ${client.user.lastName}`,
+      });
     });
   }
 }

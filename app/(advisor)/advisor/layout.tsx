@@ -2,27 +2,27 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Newspaper, Bell, MessageSquare, Users } from 'lucide-react';
+import { LayoutDashboard, Newspaper, Bell, MessageSquare } from 'lucide-react';
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
 import ThemeToggle from '@/components/atoms/ThemeToggle';
 import DarkVeil from '@/components/DarkVeil';
-import { useI18n } from '@/contexts/I18nContext';
 import { logout } from '@/lib/logout';
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
+import Badge from '@/components/atoms/Badge';
+import { useMessaging } from '@/contexts/MessagingContext';
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 	{ href: '/advisor', label: 'Tableau de bord', icon: LayoutDashboard },
 	{ href: '/advisor/activities', label: 'Actualités', icon: Newspaper },
 	{ href: '/advisor/notifications', label: 'Notifications', icon: Bell },
 	{ href: '/advisor/messages', label: 'Messages clients', icon: MessageSquare },
-	{ href: '/advisor/group-chat', label: 'Discussion groupe', icon: Users },
 ];
 
 export default function AdvisorLayout({ children }: { children: ReactNode }) {
+	const { unreadTotal } = useMessaging();
 	const pathname = usePathname();
 	const router = useRouter();
-	const { language } = useI18n();
 
 	return (
 		<div className="relative min-h-screen bg-(--background) text-white">
@@ -40,6 +40,7 @@ export default function AdvisorLayout({ children }: { children: ReactNode }) {
 							<div className="hidden gap-4 md:flex">
 								{navItems.map((item) => {
 									const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+									const isMessages = item.href === '/advisor/messages';
 									return (
 										<Link
 											key={item.href}
@@ -51,7 +52,12 @@ export default function AdvisorLayout({ children }: { children: ReactNode }) {
 											}`}
 										>
 											<item.icon className="h-4 w-4" />
-											{item.label}
+											<span>{item.label}</span>
+											{isMessages && unreadTotal > 0 && (
+												<Badge tone="success" className="shrink-0 px-2 py-0.5">
+													{unreadTotal}
+												</Badge>
+											)}
 										</Link>
 									);
 								})}

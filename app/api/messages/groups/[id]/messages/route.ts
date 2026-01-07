@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.INTERNAL_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL =
+  process.env.INTERNAL_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const authHeader = request.headers.get('authorization');
-  
+
   if (!authHeader) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -15,7 +16,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const response = await fetch(`${BACKEND_URL}/messages/conversations/${id}`, {
+    const response = await fetch(`${BACKEND_URL}/messages/groups/${id}/messages`, {
       headers: {
         Authorization: authHeader,
       },
@@ -29,9 +30,9 @@ export async function GET(
   }
 }
 
-export async function DELETE(
+export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const authHeader = request.headers.get('authorization');
 
@@ -42,11 +43,15 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    const response = await fetch(`${BACKEND_URL}/messages/conversations/${id}`, {
-      method: 'DELETE',
+    const body = await request.json();
+
+    const response = await fetch(`${BACKEND_URL}/messages/groups/${id}/messages`, {
+      method: 'POST',
       headers: {
         Authorization: authHeader,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify(body),
     });
 
     const data = await response.json();

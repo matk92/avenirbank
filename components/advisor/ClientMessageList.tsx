@@ -25,10 +25,10 @@ export default function ClientMessageList({ conversations }: ClientMessageListPr
 			{conversations.map((conv) => (
 				<Link key={conv.clientId} href={`/advisor/messages/${conv.clientId}`}>
 					<Card hover className="cursor-pointer">
-						<div className="flex items-center justify-between">
-							<div className="flex-1">
+						<div className="flex min-w-0 items-center justify-between gap-3">
+							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-2">
-									<h3 className="text-base font-semibold text-white">{conv.clientName}</h3>
+									<h3 className="truncate text-base font-semibold text-white">{conv.clientName}</h3>
 									{conv.unreadCount > 0 && (
 										<Badge tone="success">{conv.unreadCount} nouveau(x)</Badge>
 									)}

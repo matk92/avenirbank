@@ -95,6 +95,8 @@ type ClientDataAction =
   | { type: 'SET_STOCKS'; payload: Stock[] }
   | { type: 'SET_INVESTMENT_ORDERS'; payload: InvestmentOrder[] }
   | { type: 'PREPEND_INVESTMENT_ORDER'; payload: InvestmentOrder }
+  | { type: 'SET_NOTIFICATIONS'; payload: { notifications: Notification[] } }
+  | { type: 'PREPEND_NOTIFICATION'; payload: { notification: Notification } }
   | { type: 'MARK_NOTIFICATION_READ'; payload: { id: string } }
   | { type: 'APPEND_MESSAGE'; payload: AppendMessagePayload }
   | { type: 'SET_ADVISOR_TYPING'; payload: { typing: boolean } };
@@ -460,6 +462,14 @@ function clientDataReducer(state: ClientDataState, action: ClientDataAction): Cl
     case 'PREPEND_INVESTMENT_ORDER': {
       return { ...state, investmentOrders: [action.payload, ...state.investmentOrders] };
     }
+    case 'SET_NOTIFICATIONS': {
+      return { ...state, notifications: action.payload.notifications };
+    }
+    case 'PREPEND_NOTIFICATION': {
+      const incoming = action.payload.notification;
+      const withoutDup = state.notifications.filter((n) => n.id !== incoming.id);
+      return { ...state, notifications: [incoming, ...withoutDup] };
+    }
     case 'MARK_NOTIFICATION_READ': {
       const notifications = state.notifications.map((notification) =>
         notification.id === action.payload.id ? { ...notification, read: true } : notification,
@@ -576,6 +586,112 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    let notificationSource: EventSource | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    const currentTokenRef = { current: null as string | null };
+
+    const cleanupConnection = () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+      notificationSource?.close();
+      notificationSource = null;
+    };
+
+    const fetchNotifications = async (token: string) => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/notifications`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const notifications: Notification[] = Array.isArray(data)
+          ? (data as unknown[]).map((n) => {
+              const raw = n as Record<string, unknown>;
+              return {
+                id: String(raw.id ?? ''),
+                message: String(raw.message ?? ''),
+                createdAt: String(raw.createdAt ?? new Date().toISOString()),
+                read: Boolean(raw.read),
+              };
+            })
+          : [];
+
+        dispatch({ type: 'SET_NOTIFICATIONS', payload: { notifications } });
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+      }
+    };
+
+    const connectNotificationsSSE = (token: string) => {
+      notificationSource?.close();
+      notificationSource = new EventSource(`${BACKEND_URL}/sse/notifications?token=${token}`);
+
+      notificationSource.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed?.type !== 'notification') return;
+          const notif = parsed.data;
+          if (!notif?.id) return;
+          dispatch({
+            type: 'PREPEND_NOTIFICATION',
+            payload: {
+              notification: {
+                id: String(notif.id),
+                message: String(notif.message ?? ''),
+                createdAt: String(notif.createdAt ?? new Date().toISOString()),
+                read: Boolean(notif.read),
+              },
+            },
+          });
+        } catch (e) {
+          console.error('SSE parse error:', e);
+        }
+      };
+
+      notificationSource.onerror = () => {
+        notificationSource?.close();
+        // Reconnect uniquement si le token n'a pas changé entre-temps
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        reconnectTimeout = setTimeout(() => {
+          if (currentTokenRef.current === token) {
+            connectNotificationsSSE(token);
+          }
+        }, 5000);
+      };
+    };
+
+    const ensureConnected = () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        if (currentTokenRef.current) {
+          currentTokenRef.current = null;
+          cleanupConnection();
+        }
+        return;
+      }
+
+      if (currentTokenRef.current === token) return;
+
+      currentTokenRef.current = token;
+      cleanupConnection();
+      fetchNotifications(token);
+      connectNotificationsSSE(token);
+    };
+
+    ensureConnected();
+    pollInterval = setInterval(ensureConnected, 1000);
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+      cleanupConnection();
+    };
+  }, []);
 
   const createAccount = useCallback((payload: CreateAccountPayload) => {
     dispatch({ type: 'CREATE_ACCOUNT', payload });

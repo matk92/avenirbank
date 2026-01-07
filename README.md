@@ -15,8 +15,8 @@ Au démarrage, le backend exécute automatiquement un seed idempotent (création
 
 - Director: `director@avenir.test` / `Director123!`
 - Advisor: `advisor@avenir.test` / `Advisor123!`
-- Client: `client1@avenir.test` / `Client123!`
-- Client: `client2@avenir.test` / `Client123!`
+- Client 1: `client1@avenir.test` / `Client123!`
+- Client 2: `client2@avenir.test` / `Client123!`
 
 Le seed crée aussi des **actions** de démo (AVA / NEO / SOL) pour tester la partie investissement.
 
@@ -24,6 +24,36 @@ Si besoin, vous pouvez relancer manuellement:
 
 ```bash
 docker exec avenirbank-backend npm run seed
+```
+
+### Bonus Web Push (notifications admin → navigateur)
+
+Le projet supporte les notifications Web Push (Service Worker + Push API + VAPID). Quand un conseiller/directeur envoie une notification à un client (endpoint `POST /advisor/notifications`), le backend tente aussi d'envoyer une notification push au navigateur du client (si celui-ci a autorisé les notifications).
+
+- Service Worker: `public/push-sw.js`
+- Abonnement enregistré côté client dans: `app/(client)/client/ClientShell.tsx`
+- Endpoints backend: `GET /push/vapid-public-key`, `POST /push/subscribe`
+
+Pour activer réellement le push, il faut définir les variables d'environnement VAPID sur le backend:
+
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT` (ex: `mailto:dev@avenirbank.local`)
+
+Génération rapide (dans `backend/`):
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Configuration (Docker Compose):
+
+1) Créez un fichier `.env` à la racine
+2) Collez les valeurs `VAPID_PUBLIC_KEY` et `VAPID_PRIVATE_KEY`
+3) Redémarrez les conteneurs:
+
+```bash
+docker compose up -d --build
 ```
 
 ### Démarrage (local)

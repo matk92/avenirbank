@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, Percent, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Users, Percent, TrendingUp, MessageSquare } from 'lucide-react';
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
 import ThemeToggle from '@/components/atoms/ThemeToggle';
 import DarkVeil from '@/components/DarkVeil';
+import Badge from '@/components/atoms/Badge';
+import { useMessaging } from '@/contexts/MessagingContext';
 import { logout } from '@/lib/logout';
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -13,6 +15,7 @@ import type { LucideIcon } from 'lucide-react';
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 	{ href: '/director', label: 'Tableau de bord', icon: LayoutDashboard },
 	{ href: '/director/accounts', label: 'Comptes clients', icon: Users },
+	{ href: '/director/messages', label: 'Messages', icon: MessageSquare },
 	{ href: '/director/savings-rate', label: 'Taux d\'épargne', icon: Percent },
 	{ href: '/director/stocks', label: 'Actions', icon: TrendingUp },
 ];
@@ -20,6 +23,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 export default function DirectorLayout({ children }: { children: ReactNode }) {
 	const pathname = usePathname();
 	const router = useRouter();
+	const { unreadTotal } = useMessaging();
 
 	return (
 		<div className="relative min-h-screen bg-(--background) text-white">
@@ -37,6 +41,7 @@ export default function DirectorLayout({ children }: { children: ReactNode }) {
 							<div className="hidden gap-4 md:flex">
 								{navItems.map((item) => {
 									const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+									const isMessages = item.href === '/director/messages';
 									return (
 										<Link
 											key={item.href}
@@ -48,7 +53,12 @@ export default function DirectorLayout({ children }: { children: ReactNode }) {
 											}`}
 										>
 											<item.icon className="h-4 w-4" />
-											{item.label}
+											<span>{item.label}</span>
+											{isMessages && unreadTotal > 0 && (
+												<Badge tone="warning" className="shrink-0 px-2 py-0.5">
+													{unreadTotal}
+												</Badge>
+											)}
 										</Link>
 									);
 								})}

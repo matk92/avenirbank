@@ -57,6 +57,7 @@ export default function FullMessagingPanel() {
 
   const [activeTab, setActiveTab] = useState<TabType>('conversations');
   const [conversationFilter, setConversationFilter] = useState<'all' | 'pending' | 'active'>('all');
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   
 
   const [conversations, setConversations] = useState<ConversationFull[]>([]);
@@ -83,6 +84,27 @@ export default function FullMessagingPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const lastTypingSentAtRef = useRef<number>(0);
+  const [newIncomingIndicator, setNewIncomingIndicator] = useState(false);
+  const newIncomingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      setCurrentUserId(payload.sub);
+    } catch (e) {
+      console.error('Error parsing token:', e);
+    }
+  }, []);
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -255,13 +277,41 @@ export default function FullMessagingPanel() {
     socket.on('new-message', (message: Message) => {
       if (selectedConversation && message.conversationId === selectedConversation.id) {
         setMessages(prev => [...prev, message]);
+
+        if (message.senderRole === 'client') {
+          setNewIncomingIndicator(true);
+          if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
+          newIncomingTimeoutRef.current = setTimeout(() => setNewIncomingIndicator(false), 2000);
+          socket.emit('mark-read', { conversationId: message.conversationId });
+          setConversations((prev) =>
+            prev.map((c) => (c.id === message.conversationId ? { ...c, unreadCount: 0 } : c)),
+          );
+          return;
+        }
       }
 
-      setConversations(prev => prev.map(c =>
-        c.id === message.conversationId
-          ? { ...c, unreadCount: c.unreadCount + 1 }
-          : c
-      ));
+      setConversations(prev => prev.map(c => {
+        if (c.id !== message.conversationId) return c;
+        if (message.senderRole !== 'client') return c;
+        if (selectedConversation && selectedConversation.id === message.conversationId) {
+          return { ...c, unreadCount: 0 };
+        }
+        return { ...c, unreadCount: c.unreadCount + 1 };
+      }));
+    });
+
+    socket.on('message-deleted', ({ conversationId, messageId }: { conversationId: string; messageId: string }) => {
+      if (selectedConversation && selectedConversation.id === conversationId) {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      }
+    });
+
+    socket.on('conversation-deleted', ({ conversationId }: { conversationId: string }) => {
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      if (selectedConversation?.id === conversationId) {
+        setSelectedConversation(null);
+        setMessages([]);
+      }
     });
 
     socket.on('conversation-claimed', ({ conversationId, advisorId, advisorName }) => {
@@ -288,11 +338,20 @@ export default function FullMessagingPanel() {
       }
     });
 
+    socket.on('messages-read', (data: { conversationId: string; messageIds: string[]; readerId: string }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.conversationId === data.conversationId && data.messageIds.includes(m.id) ? { ...m, read: true } : m)),
+      );
+    });
+
     return () => {
       socket.off('new-message');
       socket.off('conversation-claimed');
       socket.off('conversation-transferred');
       socket.off('user-typing');
+      socket.off('messages-read');
+      socket.off('message-deleted');
+      socket.off('conversation-deleted');
     };
   }, [socket, isConnected, selectedConversation]);
 
@@ -300,6 +359,14 @@ export default function FullMessagingPanel() {
     if (!socket || !isConnected || !selectedConversation) return;
 
     socket.emit('join-conversation', { conversationId: selectedConversation.id });
+
+    socket.emit('mark-read', { conversationId: selectedConversation.id });
+    setConversations((prev) =>
+      prev.map((c) => (c.id === selectedConversation.id ? { ...c, unreadCount: 0 } : c)),
+    );
+    setMessages((prev) =>
+      prev.map((m) => (m.conversationId === selectedConversation.id && m.senderRole === 'client' ? { ...m, read: true } : m)),
+    );
 
     return () => {
       socket.emit('leave-conversation', { conversationId: selectedConversation.id });
@@ -339,50 +406,50 @@ export default function FullMessagingPanel() {
   };
 
   return (
-    <div className="h-[calc(100vh-200px)] min-h-[600px]">
+    <div className="flex h-[calc(100vh-200px)] min-h-[600px] min-h-0 flex-col">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white">Messagerie</h1>
         <p className="text-zinc-400">Gérez vos conversations avec les clients</p>
       </div>
 
-      <div className="flex h-full gap-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         {/* Left Panel - Tabs and Lists */}
-        <div className="flex w-96 flex-col">
+        <div className="flex w-full min-h-0 shrink-0 flex-col lg:w-96">
           {/* Tab Navigation */}
           <Card className="mb-4">
             <div className="flex gap-1">
               <button
                 onClick={() => setActiveTab('conversations')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'conversations'
                     ? 'bg-emerald-500/20 text-emerald-400'
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 <MessageSquare className="h-4 w-4" />
-                Conversations
+                <span className="min-w-0 truncate">Conversations</span>
               </button>
               <button
                 onClick={() => setActiveTab('search')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'search'
                     ? 'bg-emerald-500/20 text-emerald-400'
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 <Search className="h-4 w-4" />
-                Recherche
+                <span className="min-w-0 truncate">Recherche</span>
               </button>
               <button
                 onClick={() => setActiveTab('advisors')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition ${
                   activeTab === 'advisors'
                     ? 'bg-emerald-500/20 text-emerald-400'
                     : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 <Users className="h-4 w-4" />
-                Conseillers
+                <span className="min-w-0 truncate">Conseillers</span>
               </button>
             </div>
           </Card>
@@ -442,16 +509,16 @@ export default function FullMessagingPanel() {
                             : 'border-white/10 hover:border-white/20 hover:bg-white/5'
                         }`}
                       >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
+                        <div className="flex min-w-0 items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-white">{conv.clientName}</h3>
+                              <h3 className="truncate font-semibold text-white">{conv.clientName}</h3>
                               {conv.unreadCount > 0 && (
                                 <Badge tone="success">{conv.unreadCount}</Badge>
                               )}
                             </div>
                             {conv.clientEmail && (
-                              <p className="text-xs text-zinc-500">{conv.clientEmail}</p>
+                              <p className="truncate text-xs text-zinc-500">{conv.clientEmail}</p>
                             )}
                             <div className="mt-1 flex items-center gap-2 text-xs">
                               {conv.status === 'pending' ? (
@@ -473,6 +540,7 @@ export default function FullMessagingPanel() {
                             <Button
                               variant="primary"
                               size="sm"
+                              className="shrink-0"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 claimConversation(conv.id);
@@ -539,13 +607,13 @@ export default function FullMessagingPanel() {
                     searchResults.map(user => (
                       <div
                         key={user.id}
-                        className="flex items-center justify-between rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
+                        className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-white/10 p-3 hover:border-white/20 hover:bg-white/5"
                       >
-                        <div>
-                          <h3 className="font-semibold text-white">
+                        <div className="min-w-0">
+                          <h3 className="truncate font-semibold text-white">
                             {user.firstName} {user.lastName}
                           </h3>
-                          <p className="text-sm text-zinc-400">{user.email}</p>
+                          <p className="truncate text-sm text-zinc-400">{user.email}</p>
                           {user.role && (
                             <Badge tone={user.role === 'client' ? 'neutral' : 'success'} className="mt-1">
                               {user.role === 'client' ? 'Client' : user.role === 'advisor' ? 'Conseiller' : 'Directeur'}
@@ -556,6 +624,7 @@ export default function FullMessagingPanel() {
                           <Button
                             variant="primary"
                             size="sm"
+                            className="shrink-0"
                             onClick={() => startConversation(user.id)}
                           >
                             <UserPlus className="mr-1 h-4 w-4" />
@@ -606,30 +675,36 @@ export default function FullMessagingPanel() {
           </Card>
         </div>
 
-        <Card className="flex flex-1 flex-col">
+        <Card className="flex min-w-0 flex-1 flex-col">
           {selectedConversation ? (
             <>
               {/* Chat Header */}
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="flex min-w-0 items-center gap-3">
                   <button
                     onClick={() => setSelectedConversation(null)}
                     className="rounded-lg p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white lg:hidden"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">
-                      {selectedConversation.clientName}
-                    </h3>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-lg font-semibold text-white">
+                        {selectedConversation.clientName}
+                      </h3>
+                      {newIncomingIndicator && (
+                        <Badge tone="success">+1</Badge>
+                      )}
+                    </div>
                     {selectedConversation.clientEmail && (
-                      <p className="text-sm text-zinc-400">{selectedConversation.clientEmail}</p>
+                      <p className="truncate text-sm text-zinc-400">{selectedConversation.clientEmail}</p>
                     )}
                   </div>
                 </div>
                 <Button
                   variant="secondary"
                   size="sm"
+                  className="shrink-0"
                   onClick={() => {
                     fetchAdvisors();
                     setShowTransferModal(true);
@@ -669,6 +744,11 @@ export default function FullMessagingPanel() {
                           <span className="text-xs opacity-60">{formatTime(message.timestamp)}</span>
                         </div>
                         <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                        {message.senderId === currentUserId && (
+                          <div className="mt-1 text-right text-[11px] opacity-70">
+                            {message.read ? 'Lu' : 'Envoyé'}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -688,7 +768,18 @@ export default function FullMessagingPanel() {
                   type="text"
                   placeholder="Tapez votre message..."
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewMessage(value);
+
+                    if (socket && isConnected && selectedConversation && value) {
+                      const now = Date.now();
+                      if (now - lastTypingSentAtRef.current > 800) {
+                        lastTypingSentAtRef.current = now;
+                        socket.emit('typing', { conversationId: selectedConversation.id });
+                      }
+                    }
+                  }}
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();

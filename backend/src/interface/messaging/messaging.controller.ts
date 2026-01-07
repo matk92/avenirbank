@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -66,5 +67,49 @@ export class MessagingController {
     @Req() req: any,
   ) {
     return this.messagingService.getOrCreateConversation(req.user.sub, body.userId);
+  }
+
+  @Delete('conversations/:id')
+  async deleteConversation(@Param('id') id: string, @Req() req: any) {
+    const success = await this.messagingService.deleteConversation(id, req.user.sub);
+    return { success };
+  }
+
+  @Delete('messages/:id')
+  async deleteMessage(@Param('id') id: string, @Req() req: any) {
+    const success = await this.messagingService.deleteMessage(id, req.user.sub);
+    return { success };
+  }
+  @Get('groups')
+  async getMyGroups(@Req() req: any) {
+    return this.messagingService.getGroupsForUser(req.user.sub);
+  }
+
+  @Post('groups')
+  async createGroup(
+    @Body() body: { name: string; memberIds: string[] },
+    @Req() req: any,
+  ) {
+    return this.messagingService.createGroup(req.user.sub, body);
+  }
+
+  @Post('groups/:id/read')
+  async markGroupAsRead(@Param('id') id: string, @Req() req: any) {
+    await this.messagingService.markGroupAsRead(id, req.user.sub);
+    return { success: true };
+  }
+
+  @Get('groups/:id/messages')
+  async getGroupMessages(@Param('id') id: string, @Req() req: any) {
+    return this.messagingService.getGroupMessages(id, req.user.sub);
+  }
+
+  @Post('groups/:id/messages')
+  async sendGroupMessage(
+    @Param('id') id: string,
+    @Body() body: { content: string },
+    @Req() req: any,
+  ) {
+    return this.messagingService.createGroupMessage(id, req.user.sub, body.content);
   }
 }

@@ -6,6 +6,7 @@ import { Subject } from 'rxjs';
 import { NotificationTypeOrmEntity } from '@infrastructure/database/entities/notification.typeorm.entity';
 import { ActivityTypeOrmEntity } from '@infrastructure/database/entities/activity.typeorm.entity';
 import { UserTypeOrmEntity, UserRoleEnum } from '@infrastructure/database/entities/user.typeorm.entity';
+import { PushService } from '@interface/push/push.service';
 
 export interface NotificationEvent {
   type: 'notification';
@@ -42,6 +43,7 @@ export class NotificationsService {
     private activityRepository: Repository<ActivityTypeOrmEntity>,
     @InjectRepository(UserTypeOrmEntity)
     private userRepository: Repository<UserTypeOrmEntity>,
+    private readonly pushService: PushService,
   ) {}
 
   get notificationStream$() {
@@ -175,7 +177,15 @@ export class NotificationsService {
       return null;
     }
 
-    return this.createNotification(clientId, message);
+    const created = await this.createNotification(clientId, message);
+
+    await this.pushService.sendPushToUser(clientId, {
+      title: 'Nouvelle notification',
+      body: message,
+      url: '/client/activity',
+    });
+
+    return created;
   }
 
   async getRecentNotifications() {

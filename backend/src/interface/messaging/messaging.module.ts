@@ -8,7 +8,10 @@ import { MessagingController } from './messaging.controller';
 import { ConversationTypeOrmEntity } from '@infrastructure/database/entities/conversation.typeorm.entity';
 import { MessageTypeOrmEntity } from '@infrastructure/database/entities/message.typeorm.entity';
 import { GroupMessageTypeOrmEntity } from '@infrastructure/database/entities/group-message.typeorm.entity';
+import { MessageGroupTypeOrmEntity } from '@infrastructure/database/entities/message-group.typeorm.entity';
+import { MessageGroupMemberTypeOrmEntity } from '@infrastructure/database/entities/message-group-member.typeorm.entity';
 import { UserTypeOrmEntity } from '@infrastructure/database/entities/user.typeorm.entity';
+import { NotificationsModule } from '@interface/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -16,8 +19,11 @@ import { UserTypeOrmEntity } from '@infrastructure/database/entities/user.typeor
       ConversationTypeOrmEntity,
       MessageTypeOrmEntity,
       GroupMessageTypeOrmEntity,
+      MessageGroupTypeOrmEntity,
+      MessageGroupMemberTypeOrmEntity,
       UserTypeOrmEntity,
     ]),
+    NotificationsModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? 'dev-jwt-secret',
       signOptions: { expiresIn: '7d' },
