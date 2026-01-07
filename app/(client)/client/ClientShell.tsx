@@ -11,7 +11,7 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useMessaging } from '@/contexts/MessagingContext';
 import type { TranslationKey } from '@/lib/i18n';
 import { logout } from '@/lib/logout';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 const navItems: { href: string; labelKey: TranslationKey; icon: LucideIcon }[] = [
@@ -23,11 +23,88 @@ const navItems: { href: string; labelKey: TranslationKey; icon: LucideIcon }[] =
 	{ href: '/client/messages', labelKey: 'navigation.messages', icon: MessageSquare },
 ];
 
+function urlBase64ToUint8Array(base64String: string) {
+	const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+	const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+	const rawData = atob(base64);
+	const outputArray = new Uint8Array(rawData.length);
+	for (let i = 0; i < rawData.length; ++i) {
+		outputArray[i] = rawData.charCodeAt(i);
+	}
+	return outputArray;
+}
+
+async function ensurePushSubscription() {
+	if (typeof window === 'undefined') return;
+	if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+	const token = localStorage.getItem('token');
+	if (!token) return;
+
+	const keyResp = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
+	const keyData = (await keyResp.json().catch(() => null)) as { publicKey?: string | null } | null;
+	const publicKey = keyData?.publicKey;
+	if (!publicKey) return;
+
+	const registration = await navigator.serviceWorker.register('/push-sw.js');
+	let subscription = await registration.pushManager.getSubscription();
+
+	if (!subscription) {
+		const permission = await Notification.requestPermission();
+		if (permission !== 'granted') return;
+
+		subscription = await registration.pushManager.subscribe({
+			userVisibleOnly: true,
+			applicationServerKey: urlBase64ToUint8Array(publicKey),
+		});
+	}
+
+	await fetch('/api/push/subscribe', {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${token}`,
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify(subscription),
+	});
+}
+
 export default function ClientShell({ children }: { children: ReactNode }) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const { t, language } = useI18n();
 	const { unreadTotal } = useMessaging();
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+		if (!('Notification' in window)) return;
+
+		// Some browsers will ignore/block permission prompts without a user gesture.
+		// So we only request permission on the first user interaction.
+		const run = () =>
+			ensurePushSubscription().catch(() => {
+				// silent: push is a bonus feature
+			});
+
+		if (Notification.permission === 'granted') {
+			run();
+			return;
+		}
+
+		if (Notification.permission !== 'default') {
+			// denied
+			return;
+		}
+
+		const onFirstClick = () => {
+			window.removeEventListener('click', onFirstClick);
+			run();
+		};
+		window.addEventListener('click', onFirstClick, { once: true });
+		return () => {
+			window.removeEventListener('click', onFirstClick);
+		};
+	}, []);
 
 	return (
 		<div className="relative min-h-screen bg-(--background) text-white">
