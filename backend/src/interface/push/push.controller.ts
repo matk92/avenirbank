@@ -14,7 +14,7 @@ export class PushController {
   @Post('push/subscribe')
   @UseGuards(JwtAuthGuard)
   async subscribe(@Body() body: any, @Req() req: any) {
-    await this.pushService.upsertSubscriptionForUser(req.user.sub, body);
+    await this.pushService.upsertSubscriptionForUser(req.user.id, body);
     return { ok: true };
   }
 
@@ -22,7 +22,7 @@ export class PushController {
   @UseGuards(JwtAuthGuard)
   async unsubscribe(@Body() body: { endpoint?: string }, @Req() req: any) {
     if (body?.endpoint) {
-      await this.pushService.removeSubscriptionByEndpoint(req.user.sub, body.endpoint);
+      await this.pushService.removeSubscriptionByEndpoint(req.user.id, body.endpoint);
     }
     return { ok: true };
   }

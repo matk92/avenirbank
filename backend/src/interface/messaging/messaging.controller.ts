@@ -19,17 +19,17 @@ export class MessagingController {
 
   @Get('conversations')
   async getMyConversations(@Req() req: any) {
-    return this.messagingService.getConversationsForUser(req.user.sub);
+    return this.messagingService.getConversationsForUser(req.user.id);
   }
 
   @Get('conversations/:id')
   async getConversationById(@Param('id') id: string, @Req() req: any) {
-    return this.messagingService.getConversationById(id, req.user.sub);
+    return this.messagingService.getConversationById(id, req.user.id);
   }
 
   @Get('conversations/:id/messages')
   async getConversationMessages(@Param('id') id: string, @Req() req: any) {
-    return this.messagingService.getMessages(id, req.user.sub);
+    return this.messagingService.getMessages(id, req.user.id);
   }
 
   @Post('conversations/:id/messages')
@@ -38,18 +38,18 @@ export class MessagingController {
     @Body() body: { content: string },
     @Req() req: any,
   ) {
-    return this.messagingService.createMessage(id, req.user.sub, body.content);
+    return this.messagingService.createMessage(id, req.user.id, body.content);
   }
 
   @Post('conversations/:id/read')
   async markAsRead(@Param('id') id: string, @Req() req: any) {
-    await this.messagingService.markMessagesAsRead(id, req.user.sub);
+    await this.messagingService.markMessagesAsRead(id, req.user.id);
     return { success: true };
   }
 
   @Get('users')
   async getUsers(@Req() req: any) {
-    return this.messagingService.getAllUsers(req.user.sub);
+    return this.messagingService.getAllUsers(req.user.id);
   }
 
   @Get('users/search')
@@ -58,7 +58,7 @@ export class MessagingController {
     @Query('role') role: string,
     @Req() req: any,
   ) {
-    return this.messagingService.searchUsersByEmail(email, role, req.user.sub);
+    return this.messagingService.searchUsersByEmail(email, role, req.user.id);
   }
 
   @Post('conversations/start')
@@ -66,23 +66,23 @@ export class MessagingController {
     @Body() body: { userId: string },
     @Req() req: any,
   ) {
-    return this.messagingService.getOrCreateConversation(req.user.sub, body.userId);
+    return this.messagingService.getOrCreateConversation(req.user.id, body.userId);
   }
 
   @Delete('conversations/:id')
   async deleteConversation(@Param('id') id: string, @Req() req: any) {
-    const success = await this.messagingService.deleteConversation(id, req.user.sub);
+    const success = await this.messagingService.deleteConversation(id, req.user.id);
     return { success };
   }
 
   @Delete('messages/:id')
   async deleteMessage(@Param('id') id: string, @Req() req: any) {
-    const success = await this.messagingService.deleteMessage(id, req.user.sub);
+    const success = await this.messagingService.deleteMessage(id, req.user.id);
     return { success };
   }
   @Get('groups')
   async getMyGroups(@Req() req: any) {
-    return this.messagingService.getGroupsForUser(req.user.sub);
+    return this.messagingService.getGroupsForUser(req.user.id);
   }
 
   @Post('groups')
@@ -90,18 +90,18 @@ export class MessagingController {
     @Body() body: { name: string; memberIds: string[] },
     @Req() req: any,
   ) {
-    return this.messagingService.createGroup(req.user.sub, body);
+    return this.messagingService.createGroup(req.user.id, body);
   }
 
   @Post('groups/:id/read')
   async markGroupAsRead(@Param('id') id: string, @Req() req: any) {
-    await this.messagingService.markGroupAsRead(id, req.user.sub);
+    await this.messagingService.markGroupAsRead(id, req.user.id);
     return { success: true };
   }
 
   @Get('groups/:id/messages')
   async getGroupMessages(@Param('id') id: string, @Req() req: any) {
-    return this.messagingService.getGroupMessages(id, req.user.sub);
+    return this.messagingService.getGroupMessages(id, req.user.id);
   }
 
   @Post('groups/:id/messages')
@@ -110,6 +110,6 @@ export class MessagingController {
     @Body() body: { content: string },
     @Req() req: any,
   ) {
-    return this.messagingService.createGroupMessage(id, req.user.sub, body.content);
+    return this.messagingService.createGroupMessage(id, req.user.id, body.content);
   }
 }

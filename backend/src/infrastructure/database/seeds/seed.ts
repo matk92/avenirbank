@@ -3,7 +3,6 @@ import { hash } from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { UserTypeOrmEntity, UserRoleEnum } from '../entities/user.typeorm.entity';
 import { ConversationTypeOrmEntity, ConversationStatusEnum } from '../entities/conversation.typeorm.entity';
-import { MessageTypeOrmEntity } from '../entities/message.typeorm.entity';
 import { NotificationTypeOrmEntity } from '../entities/notification.typeorm.entity';
 import { ActivityTypeOrmEntity } from '../entities/activity.typeorm.entity';
 import { GroupMessageTypeOrmEntity } from '../entities/group-message.typeorm.entity';
@@ -41,7 +40,6 @@ async function seed() {
     entities: [
       UserTypeOrmEntity,
       ConversationTypeOrmEntity,
-      MessageTypeOrmEntity,
       NotificationTypeOrmEntity,
       ActivityTypeOrmEntity,
       GroupMessageTypeOrmEntity,
@@ -63,7 +61,6 @@ async function seed() {
 
   const userRepo = dataSource.getRepository(UserTypeOrmEntity);
   const conversationRepo = dataSource.getRepository(ConversationTypeOrmEntity);
-  const messageRepo = dataSource.getRepository(MessageTypeOrmEntity);
   const notificationRepo = dataSource.getRepository(NotificationTypeOrmEntity);
   const activityRepo = dataSource.getRepository(ActivityTypeOrmEntity);
   const groupMessageRepo = dataSource.getRepository(GroupMessageTypeOrmEntity);
@@ -260,66 +257,6 @@ async function seed() {
     user1Id: advisor.id,
     user2Id: director.id,
     status: ConversationStatusEnum.ACTIVE,
-  });
-
-
-  const ensureMessage = async (input: {
-    id: string;
-    conversationId: string;
-    senderId: string;
-    senderName: string;
-    senderRole: UserRoleEnum;
-    content: string;
-  }) => {
-    const existing = await messageRepo.findOne({ where: { id: input.id } });
-    if (existing) return existing;
-
-    const entity = new MessageTypeOrmEntity();
-    entity.id = input.id;
-    entity.conversationId = input.conversationId;
-    entity.senderId = input.senderId;
-    entity.senderName = input.senderName;
-    entity.senderRole = input.senderRole;
-    entity.content = input.content;
-    entity.read = false;
-    await messageRepo.save(entity);
-    return entity;
-  };
-
-  await ensureMessage({
-    id: '00000000-0000-0000-0002-000000000001',
-    conversationId: conv1Id,
-    senderId: client1.id,
-    senderName: `${client1.firstName} ${client1.lastName}`,
-    senderRole: UserRoleEnum.CLIENT,
-    content: 'Bonjour, j\'aimerais obtenir des informations sur les crédits immobiliers.',
-  });
-
-  await ensureMessage({
-    id: '00000000-0000-0000-0002-000000000002',
-    conversationId: conv1Id,
-    senderId: advisor.id,
-    senderName: `${advisor.firstName} ${advisor.lastName}`,
-    senderRole: UserRoleEnum.ADVISOR,
-    content: 'Bonjour Marie ! Bien sûr, je serais ravi de vous aider. Quel est votre projet immobilier ?',
-  });
-
-  await ensureMessage({
-    id: '00000000-0000-0000-0002-000000000003',
-    conversationId: conv1Id,
-    senderId: client1.id,
-    senderName: `${client1.firstName} ${client1.lastName}`,
-    senderRole: UserRoleEnum.CLIENT,
-    content: 'Je souhaite acheter un appartement à Paris, budget autour de 400 000€.',
-  });
-
-  await ensureMessage({
-    id: '00000000-0000-0000-0002-000000000004',
-    conversationId: conv2Id,
-    senderId: client2.id,
-    senderName: `${client2.firstName} ${client2.lastName}`,
-    senderRole: UserRoleEnum.CLIENT,
-    content: 'Bonjour, je suis nouveau client et j\'ai quelques questions sur mon compte.',
   });
 
 
