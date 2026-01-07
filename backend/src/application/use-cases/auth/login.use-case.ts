@@ -35,6 +35,11 @@ export class LoginUseCase {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
+    
+    // Check if email is verified
+    if (!user.isEmailConfirmed) {
+      throw new UnauthorizedException('Please verify your email before logging in');
+    }
 
     return { user };
   }

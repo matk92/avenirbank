@@ -24,7 +24,7 @@ export function middleware(request: NextRequest): NextResponse | undefined {
   ];
 
   const authRoutes = ['/login', '/register', '/auth/login', '/auth/register'];
-  const publicRoutes = ['/', ...authRoutes];
+  const publicRoutes = ['/', '/verify-email', '/resend-verification', ...authRoutes];
   const isPublicRoute = publicRoutes.includes(pathname);
   const isAuthRoute = authRoutes.includes(pathname);
 

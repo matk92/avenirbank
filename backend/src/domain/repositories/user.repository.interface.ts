@@ -45,4 +45,9 @@ export interface IUserRepository {
    * Check if email exists
    */
   emailExists(email: string): Promise<boolean>;
+  
+  /**
+   * Find user by email confirmation token
+   */
+  findByEmailConfirmationToken(token: string): Promise<User | null>;
 }

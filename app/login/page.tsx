@@ -17,7 +17,7 @@ import { useI18n } from '@/contexts/I18nContext';
 import type { TranslationKey } from '@/lib/i18n';
 
 const loginSchema = z.object({
-  email: z.string().email('form.error.email'),
+  email: z.string().min(1, 'form.error.required').email('form.error.email'),
   password: z.string().min(1, 'form.error.required'),
 });
 
@@ -33,6 +33,8 @@ export default function LoginPage() {
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
   });
 
   const submit = form.handleSubmit(async (values: LoginFormValues) => {
