@@ -4,7 +4,6 @@ import { useState, useMemo } from 'react';
 import Card from '@/components/atoms/Card';
 import Badge from '@/components/atoms/Badge';
 import Button from '@/components/atoms/Button';
-import Select from '@/components/atoms/Select';
 import { BankAccount } from '@/lib/types-director';
 import { Ban, Pause, Play, Edit } from 'lucide-react';
 import Link from 'next/link';
@@ -22,17 +21,8 @@ export default function ClientAccountsList({
   onBan,
   onReactivate,
 }: ClientAccountsListProps) {
-  const [filterType, setFilterType] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [loadingAccountId, setLoadingAccountId] = useState<string | null>(null);
-
-  const filteredAccounts = useMemo(() => {
-    return accounts.filter((account) => {
-      const typeMatch = filterType === 'all' || account.accountType === filterType;
-      const statusMatch = filterStatus === 'all' || account.status === filterStatus;
-      return typeMatch && statusMatch;
-    });
-  }, [accounts, filterType, filterStatus]);
+  const filteredAccounts = useMemo(() => accounts, [accounts]);
 
   const handleAction = async (
     accountId: string,
@@ -71,42 +61,8 @@ export default function ClientAccountsList({
   return (
     <div className="space-y-6">
       <Card>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label htmlFor="filterType" className="mb-2 block text-sm font-medium text-zinc-300">
-              Type de compte
-            </label>
-            <Select
-              id="filterType"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-            >
-              <option value="all">Tous les types</option>
-              <option value="checking">Comptes courants</option>
-              <option value="savings">Comptes épargne</option>
-            </Select>
-          </div>
-
-          <div>
-            <label htmlFor="filterStatus" className="mb-2 block text-sm font-medium text-zinc-300">
-              Statut
-            </label>
-            <Select
-              id="filterStatus"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-            >
-              <option value="all">Tous les statuts</option>
-              <option value="active">Actifs</option>
-              <option value="suspended">Suspendus</option>
-              <option value="banned">Bannis</option>
-            </Select>
-          </div>
-        </div>
-
         <div className="mt-4 text-sm text-zinc-400">
-          {filteredAccounts.length} compte{filteredAccounts.length > 1 ? 's' : ''} trouvé
-          {filteredAccounts.length > 1 ? 's' : ''}
+          {filteredAccounts.length} compte{filteredAccounts.length > 1 ? 's' : ''} trouvé{filteredAccounts.length > 1 ? 's' : ''}
         </div>
       </Card>
 
