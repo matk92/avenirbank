@@ -3,12 +3,13 @@
  * Validation for account creation requests
  */
 
-import { IsString, IsEnum, IsOptional, IsNumber, Min, Max, Length } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsNumber, Min, Max } from 'class-validator';
 import { AccountType } from '@domain/entities/account.entity';
+import { IsAccountName } from '@interface/shared/validators/common-validators';
 
 export class CreateAccountDto {
   @IsString()
-  @Length(1, 100, { message: 'Account name must be between 1 and 100 characters' })
+  @IsAccountName({ message: 'Account name must be between 1 and 100 characters' })
   name!: string;
 
   @IsEnum(AccountType, { message: 'Account type must be either CHECKING or SAVINGS' })
