@@ -1,11 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { In, Repository, Like } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { ConversationTypeOrmEntity, ConversationStatusEnum } from '@infrastructure/database/entities/conversation.typeorm.entity';
 import { MessageTypeOrmEntity } from '@infrastructure/database/entities/message.typeorm.entity';
+import { GroupMessageTypeOrmEntity } from '@infrastructure/database/entities/group-message.typeorm.entity';
+import { MessageGroupTypeOrmEntity } from '@infrastructure/database/entities/message-group.typeorm.entity';
+import { MessageGroupMemberTypeOrmEntity } from '@infrastructure/database/entities/message-group-member.typeorm.entity';
 import { UserTypeOrmEntity, UserRoleEnum } from '@infrastructure/database/entities/user.typeorm.entity';
 import { MessagingGateway } from './messaging.gateway';
+import { GroupChatGateway } from './group-chat.gateway';
 import { NotificationsService } from '@interface/notifications/notifications.service';
 
 @Injectable()
@@ -15,9 +19,16 @@ export class MessagingService {
     private conversationRepository: Repository<ConversationTypeOrmEntity>,
     @InjectRepository(MessageTypeOrmEntity)
     private messageRepository: Repository<MessageTypeOrmEntity>,
+    @InjectRepository(GroupMessageTypeOrmEntity)
+    private groupMessageRepository: Repository<GroupMessageTypeOrmEntity>,
+    @InjectRepository(MessageGroupTypeOrmEntity)
+    private messageGroupRepository: Repository<MessageGroupTypeOrmEntity>,
+    @InjectRepository(MessageGroupMemberTypeOrmEntity)
+    private messageGroupMemberRepository: Repository<MessageGroupMemberTypeOrmEntity>,
     @InjectRepository(UserTypeOrmEntity)
     private userRepository: Repository<UserTypeOrmEntity>,
     private messagingGateway: MessagingGateway,
+    private groupChatGateway: GroupChatGateway,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -338,5 +349,209 @@ export class MessagingService {
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
     };
+  }
+  private getGroupRoom(groupId: string) {
+    return `group:${groupId}`;
+  }
+
+  async getGroupsForUser(userId: string) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) return [];
+
+    if (user.role !== UserRoleEnum.ADVISOR && user.role !== UserRoleEnum.DIRECTOR) {
+      return [];
+    }
+
+    const memberships = await this.messageGroupMemberRepository.find({
+      where: { userId },
+      relations: ['group'],
+    });
+
+    const groupIds = memberships.map((m) => m.groupId);
+    if (groupIds.length === 0) return [];
+
+    const memberCountsRaw = await this.messageGroupMemberRepository
+      .createQueryBuilder('m')
+      .select('m.groupId', 'groupId')
+      .addSelect('COUNT(*)', 'count')
+      .where('m.groupId IN (:...groupIds)', { groupIds })
+      .groupBy('m.groupId')
+      .getRawMany<{ groupId: string; count: string }>();
+
+    const memberCountByGroupId = new Map<string, number>();
+    for (const row of memberCountsRaw) {
+      memberCountByGroupId.set(row.groupId, Number(row.count) || 0);
+    }
+
+    const unreadCountByGroupId = new Map<string, number>();
+    for (const membership of memberships) {
+      const room = this.getGroupRoom(membership.groupId);
+      const lastReadAt = membership.lastReadAt;
+      const qb = this.groupMessageRepository
+        .createQueryBuilder('gm')
+        .where('gm.room = :room', { room })
+        .andWhere('gm.authorId != :userId', { userId });
+      if (lastReadAt) {
+        qb.andWhere('gm.createdAt > :lastReadAt', { lastReadAt });
+      }
+      const count = await qb.getCount();
+      unreadCountByGroupId.set(membership.groupId, count);
+    }
+
+    const groups = memberships
+      .map((m) => {
+        const group = m.group;
+        return {
+          id: group.id,
+          name: group.name,
+          memberCount: memberCountByGroupId.get(group.id) ?? 0,
+          unreadCount: unreadCountByGroupId.get(group.id) ?? 0,
+          createdAt: group.createdAt,
+          updatedAt: group.updatedAt,
+        };
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+    return groups;
+  }
+
+  async createGroup(
+    creatorId: string,
+    input: { name: string; memberIds: string[] },
+  ) {
+    const creator = await this.userRepository.findOne({ where: { id: creatorId } });
+    if (!creator) throw new BadRequestException('User not found');
+
+    if (creator.role !== UserRoleEnum.ADVISOR && creator.role !== UserRoleEnum.DIRECTOR) {
+      throw new ForbiddenException('Only staff can create groups');
+    }
+
+    const rawName = (input?.name ?? '').trim();
+    if (rawName.length < 2) {
+      throw new BadRequestException('Group name is too short');
+    }
+
+    const uniqueMemberIds = Array.from(
+      new Set([...(Array.isArray(input?.memberIds) ? input.memberIds : []), creatorId]),
+    ).filter(Boolean);
+
+    const users = await this.userRepository.find({ where: { id: In(uniqueMemberIds), isBanned: false } });
+    const validUsers = users.filter(
+      (u) => u.role === UserRoleEnum.ADVISOR || u.role === UserRoleEnum.DIRECTOR,
+    );
+
+    if (validUsers.length < 2) {
+      throw new BadRequestException('A group must contain at least 2 staff members');
+    }
+
+    const group = new MessageGroupTypeOrmEntity();
+    group.id = uuidv4();
+    group.name = rawName;
+    group.createdById = creatorId;
+    await this.messageGroupRepository.save(group);
+
+    const now = new Date();
+    const members = validUsers.map((u) => {
+      const m = new MessageGroupMemberTypeOrmEntity();
+      m.id = uuidv4();
+      m.groupId = group.id;
+      m.userId = u.id;
+      m.lastReadAt = now;
+      return m;
+    });
+    await this.messageGroupMemberRepository.save(members);
+
+    const dto = {
+      id: group.id,
+      name: group.name,
+      memberCount: members.length,
+      unreadCount: 0,
+      createdAt: group.createdAt,
+      updatedAt: group.updatedAt,
+    };
+
+    return dto;
+  }
+
+  async markGroupAsRead(groupId: string, userId: string) {
+    const membership = await this.messageGroupMemberRepository.findOne({
+      where: { groupId, userId },
+    });
+    if (!membership) return;
+
+    membership.lastReadAt = new Date();
+    await this.messageGroupMemberRepository.save(membership);
+  }
+
+  async getGroupMessages(groupId: string, userId: string) {
+    const membership = await this.messageGroupMemberRepository.findOne({
+      where: { groupId, userId },
+    });
+    if (!membership) return [];
+
+    const room = this.getGroupRoom(groupId);
+    const messages = await this.groupMessageRepository.find({
+      where: { room },
+      order: { createdAt: 'ASC' },
+      take: 100,
+    });
+
+    return messages.map((m) => ({
+      id: m.id,
+      room: m.room,
+      author: {
+        id: m.authorId,
+        name: m.authorName,
+        role: m.authorRole.toLowerCase(),
+      },
+      content: m.content,
+      createdAt: m.createdAt.toISOString(),
+    }));
+  }
+
+  async createGroupMessage(groupId: string, senderId: string, content: string) {
+    const sender = await this.userRepository.findOne({ where: { id: senderId } });
+    if (!sender) return null;
+
+    if (sender.role !== UserRoleEnum.ADVISOR && sender.role !== UserRoleEnum.DIRECTOR) {
+      return null;
+    }
+
+    const membership = await this.messageGroupMemberRepository.findOne({
+      where: { groupId, userId: senderId },
+    });
+    if (!membership) return null;
+
+    const trimmed = (content ?? '').trim();
+    if (!trimmed) return null;
+
+    const room = this.getGroupRoom(groupId);
+
+    const message = new GroupMessageTypeOrmEntity();
+    message.id = uuidv4();
+    message.room = room;
+    message.authorId = senderId;
+    message.authorName = `${sender.firstName} ${sender.lastName}`;
+    message.authorRole = sender.role;
+    message.content = trimmed;
+    await this.groupMessageRepository.save(message);
+
+    await this.messageGroupRepository.update({ id: groupId }, { updatedAt: () => 'CURRENT_TIMESTAMP' });
+
+    const payload = {
+      id: message.id,
+      room: message.room,
+      author: {
+        id: message.authorId,
+        name: message.authorName,
+        role: message.authorRole.toLowerCase(),
+      },
+      content: message.content,
+      createdAt: message.createdAt.toISOString(),
+    };
+
+    this.groupChatGateway.server?.to?.(room)?.emit?.('group-message', payload);
+
+    return payload;
   }
 }

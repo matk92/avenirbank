@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Newspaper, Bell, MessageSquare, Users } from 'lucide-react';
+import { LayoutDashboard, Newspaper, Bell, MessageSquare } from 'lucide-react';
 import LanguageSwitcher from '@/components/atoms/LanguageSwitcher';
 import ThemeToggle from '@/components/atoms/ThemeToggle';
 import DarkVeil from '@/components/DarkVeil';
@@ -17,7 +17,6 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 	{ href: '/advisor/activities', label: 'Actualités', icon: Newspaper },
 	{ href: '/advisor/notifications', label: 'Notifications', icon: Bell },
 	{ href: '/advisor/messages', label: 'Messages clients', icon: MessageSquare },
-	{ href: '/advisor/group-chat', label: 'Discussion groupe', icon: Users },
 ];
 
 export default function AdvisorLayout({ children }: { children: ReactNode }) {

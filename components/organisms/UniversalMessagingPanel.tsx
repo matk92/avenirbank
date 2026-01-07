@@ -5,6 +5,7 @@ import Card from '@/components/atoms/Card';
 import Badge from '@/components/atoms/Badge';
 import Button from '@/components/atoms/Button';
 import Input from '@/components/atoms/Input';
+import Modal from '@/components/molecules/Modal';
 import { useWebSocket } from '@/lib/websocket-client';
 import { useMessaging } from '@/contexts/MessagingContext';
 import {
@@ -47,6 +48,26 @@ interface Conversation {
   createdAt: Date;
   updatedAt: Date;
 }
+interface MessageGroup {
+  id: string;
+  name: string;
+  memberCount: number;
+  unreadCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface GroupMessage {
+  id: string;
+  room: string;
+  author: {
+    id: string;
+    name: string;
+    role: string;
+  };
+  content: string;
+  createdAt: string;
+}
 
 type TabType = 'conversations' | 'search' | 'users';
 
@@ -57,28 +78,43 @@ export default function UniversalMessagingPanel() {
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [groups, setGroups] = useState<MessageGroup[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<MessageGroup | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [newGroupMessage, setNewGroupMessage] = useState('');
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const { socket, isConnected } = useWebSocket('/messaging');
+  const { socket: groupSocket, isConnected: isGroupConnected } = useWebSocket('/group-chat');
   const { refreshUnreadTotal } = useMessaging();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const groupMessagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const groupTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [typingRole, setTypingRole] = useState<string | null>(null);
+  const [groupTypingUser, setGroupTypingUser] = useState<string | null>(null);
   const lastTypingSentAtRef = useRef<number>(0);
+  const lastGroupTypingSentAtRef = useRef<number>(0);
   const [newIncomingIndicator, setNewIncomingIndicator] = useState(false);
   const newIncomingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [messageToast, setMessageToast] = useState<string | null>(null);
   const messageToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [createGroupName, setCreateGroupName] = useState('');
+  const [createGroupMemberIds, setCreateGroupMemberIds] = useState<string[]>([]);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
 
   useEffect(() => {
@@ -142,6 +178,30 @@ export default function UniversalMessagingPanel() {
       setIsLoadingConversations(false);
     }
   }, []);
+
+  const fetchGroups = useCallback(async () => {
+    if (isClientRole) {
+      setGroups([]);
+      setIsLoadingGroups(false);
+      return;
+    }
+
+    setIsLoadingGroups(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/messages/groups', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setGroups(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+    } finally {
+      setIsLoadingGroups(false);
+    }
+  }, [isClientRole]);
 
   const fetchMessages = useCallback(async (conversationId: string) => {
     setIsLoadingMessages(true);
@@ -358,8 +418,15 @@ export default function UniversalMessagingPanel() {
 
   useEffect(() => {
     fetchConversations();
+    fetchGroups();
     fetchUsers();
-  }, [fetchConversations, fetchUsers]);
+  }, [fetchConversations, fetchGroups, fetchUsers]);
+
+  useEffect(() => {
+    if (currentUserRole) {
+      fetchGroups();
+    }
+  }, [currentUserRole, fetchGroups]);
 
   useEffect(() => {
     if (selectedConversation) {
@@ -368,6 +435,12 @@ export default function UniversalMessagingPanel() {
       setTypingRole(null);
     }
   }, [selectedConversation, fetchMessages]);
+
+  useEffect(() => {
+    if (!selectedGroup) return;
+    setGroupMessages([]);
+    setGroupTypingUser(null);
+  }, [selectedGroup]);
 
   useEffect(() => {
     const debounce = setTimeout(() => {
@@ -468,6 +541,67 @@ export default function UniversalMessagingPanel() {
   }, [socket, isConnected, selectedConversation, currentUserId, fetchConversations]);
 
   useEffect(() => {
+    if (!groupSocket || !isGroupConnected) return;
+
+    groupSocket.on('group-message', (message: GroupMessage) => {
+      const room = message?.room;
+      const groupId = typeof room === 'string' && room.startsWith('group:') ? room.slice('group:'.length) : null;
+
+      if (selectedGroup && groupId === selectedGroup.id) {
+        setGroupMessages((prev) => [...prev, message]);
+        if (message.author?.id !== currentUserId) {
+          const token = localStorage.getItem('token');
+          void fetch(`/api/messages/groups/${selectedGroup.id}/read`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          setGroups((prev) => prev.map((g) => (g.id === selectedGroup.id ? { ...g, unreadCount: 0 } : g)));
+        }
+        return;
+      }
+
+      if (groupId) {
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.id === groupId
+              ? { ...g, unreadCount: g.unreadCount + 1, updatedAt: new Date(message.createdAt) }
+              : g,
+          ),
+        );
+        setMessageToast('Vous avez un message de groupe en attente');
+        if (messageToastTimeoutRef.current) clearTimeout(messageToastTimeoutRef.current);
+        messageToastTimeoutRef.current = setTimeout(() => setMessageToast(null), 3500);
+      }
+    });
+
+    groupSocket.on('group-messages-history', (history: GroupMessage[]) => {
+      setGroupMessages(Array.isArray(history) ? history : []);
+    });
+
+    groupSocket.on('user-typing', ({ userName }: { userId: string; userName: string }) => {
+      setGroupTypingUser(userName);
+      if (groupTypingTimeoutRef.current) clearTimeout(groupTypingTimeoutRef.current);
+      groupTypingTimeoutRef.current = setTimeout(() => setGroupTypingUser(null), 3000);
+    });
+
+    groupSocket.on('group-message-notification', ({ groupId, message }: { groupId?: string; message?: string }) => {
+      if (!groupId) return;
+      if (selectedGroup?.id === groupId) return;
+      setMessageToast(message || 'Vous avez un message de groupe en attente');
+      if (messageToastTimeoutRef.current) clearTimeout(messageToastTimeoutRef.current);
+      messageToastTimeoutRef.current = setTimeout(() => setMessageToast(null), 3500);
+      fetchGroups();
+    });
+
+    return () => {
+      groupSocket.off('group-message');
+      groupSocket.off('group-messages-history');
+      groupSocket.off('user-typing');
+      groupSocket.off('group-message-notification');
+    };
+  }, [groupSocket, isGroupConnected, selectedGroup, currentUserId, fetchGroups]);
+
+  useEffect(() => {
     return () => {
       if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
       if (messageToastTimeoutRef.current) clearTimeout(messageToastTimeoutRef.current);
@@ -486,8 +620,31 @@ export default function UniversalMessagingPanel() {
   }, [socket, isConnected, selectedConversation, markSelectedConversationAsRead]);
 
   useEffect(() => {
+    if (!groupSocket || !isGroupConnected || !selectedGroup) return;
+
+    const room = `group:${selectedGroup.id}`;
+    groupSocket.emit('join-group', room);
+    groupSocket.emit('get-group-messages', room);
+
+    const token = localStorage.getItem('token');
+    void fetch(`/api/messages/groups/${selectedGroup.id}/read`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setGroups((prev) => prev.map((g) => (g.id === selectedGroup.id ? { ...g, unreadCount: 0 } : g)));
+
+    return () => {
+      groupSocket.emit('leave-group', room);
+    };
+  }, [groupSocket, isGroupConnected, selectedGroup]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    groupMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [groupMessages]);
 
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString('fr-FR', {
@@ -524,6 +681,89 @@ export default function UniversalMessagingPanel() {
       director: 'Directeur',
     };
     return <Badge tone={colors[role] || 'neutral'}>{labels[role] || role}</Badge>;
+  };
+
+  const toggleCreateGroupMember = (userId: string) => {
+    setCreateGroupMemberIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
+
+  const createGroup = async () => {
+    if (isClientRole) return;
+    const name = createGroupName.trim();
+    if (name.length < 2) return;
+    if (createGroupMemberIds.length < 1) return;
+
+    setIsCreatingGroup(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/messages/groups', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, memberIds: createGroupMemberIds }),
+      });
+
+      if (!response.ok) {
+        console.error('Error creating group:', await response.text());
+        return;
+      }
+
+      const group: MessageGroup = await response.json();
+      setGroups((prev) => {
+        const next = [group, ...prev.filter((g) => g.id !== group.id)];
+        return next.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      });
+
+      setSelectedConversation(null);
+      setMessages([]);
+      setSelectedGroup(group);
+      setIsCreateGroupOpen(false);
+      setCreateGroupName('');
+      setCreateGroupMemberIds([]);
+      setActiveTab('conversations');
+    } catch (error) {
+      console.error('Error creating group:', error);
+    } finally {
+      setIsCreatingGroup(false);
+    }
+  };
+
+  const sendGroupMessage = async () => {
+    if (!newGroupMessage.trim() || !selectedGroup) return;
+    const content = newGroupMessage.trim();
+
+    if (groupSocket && isGroupConnected) {
+      groupSocket.emit('send-group-message', {
+        room: `group:${selectedGroup.id}`,
+        content,
+      });
+      setNewGroupMessage('');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/messages/groups/${selectedGroup.id}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content }),
+      });
+      if (response.ok) {
+        const message: GroupMessage = await response.json();
+        setGroupMessages((prev) => [...prev, message]);
+      }
+    } catch (error) {
+      console.error('Error sending group message:', error);
+    } finally {
+      setNewGroupMessage('');
+    }
   };
 
   return (
@@ -583,51 +823,114 @@ export default function UniversalMessagingPanel() {
           <Card className="flex-1 overflow-hidden">
             {activeTab === 'conversations' && (
               <div className="flex h-full flex-col">
-                <h3 className="mb-4 text-lg font-semibold text-white">
-                  Mes conversations ({conversations.length})
-                </h3>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="min-w-0 truncate text-lg font-semibold text-white">
+                    Mes messages ({conversations.length + (isClientRole ? 0 : groups.length)})
+                  </h3>
+                  {!isClientRole && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setIsCreateGroupOpen(true)}
+                      className="shrink-0"
+                    >
+                      <Users className="mr-1 h-4 w-4" />
+                      Créer un groupe
+                    </Button>
+                  )}
+                </div>
 
                 <div className="flex-1 space-y-2 overflow-y-auto">
-                  {isLoadingConversations ? (
+                  {isLoadingConversations || (!isClientRole && isLoadingGroups) ? (
                     <p className="text-center text-zinc-400">Chargement...</p>
-                  ) : conversations.length === 0 ? (
+                  ) : conversations.length === 0 && (isClientRole || groups.length === 0) ? (
                     <div className="text-center text-zinc-500">
                       <MessageSquare className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                      <p>Aucune conversation</p>
-                      <p className="text-sm">Commencez par rechercher un utilisateur</p>
+                      <p>Aucun message</p>
+                      <p className="text-sm">Commencez par contacter un utilisateur ou créer un groupe</p>
                     </div>
                   ) : (
-                    conversations.map((conv) => (
-                      <div
-                        key={conv.id}
-                        onClick={() => setSelectedConversation(conv)}
-                        className={`cursor-pointer rounded-xl border p-3 transition ${
-                          selectedConversation?.id === conv.id
-                            ? accent.selectedConversation
-                            : 'border-white/10 hover:border-white/20 hover:bg-white/5'
-                        }`}
-                      >
-                        <div className="flex min-w-0 items-start justify-between">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <h3 className="truncate font-semibold text-white">{conv.recipientName}</h3>
-                              {conv.unreadCount > 0 && (
-                                <Badge tone={accentBadgeTone}>{conv.unreadCount}</Badge>
-                              )}
+                    (
+                      [
+                        ...conversations.map((conv) => ({ type: 'conversation' as const, updatedAt: conv.updatedAt, conv })),
+                        ...(!isClientRole
+                          ? groups.map((group) => ({ type: 'group' as const, updatedAt: group.updatedAt, group }))
+                          : []),
+                      ]
+                        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                        .map((item) => {
+                          if (item.type === 'conversation') {
+                            const conv = item.conv;
+                            return (
+                              <div
+                                key={`conv-${conv.id}`}
+                                onClick={() => {
+                                  setSelectedGroup(null);
+                                  setGroupMessages([]);
+                                  setSelectedConversation(conv);
+                                }}
+                                className={`cursor-pointer rounded-xl border p-3 transition ${
+                                  selectedConversation?.id === conv.id
+                                    ? accent.selectedConversation
+                                    : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+                                }`}
+                              >
+                                <div className="flex min-w-0 items-start justify-between">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <h3 className="truncate font-semibold text-white">{conv.recipientName}</h3>
+                                      {conv.unreadCount > 0 && (
+                                        <Badge tone={accentBadgeTone}>{conv.unreadCount}</Badge>
+                                      )}
+                                    </div>
+                                    {conv.recipientEmail && (
+                                      <p className="truncate text-xs text-zinc-500">{conv.recipientEmail}</p>
+                                    )}
+                                    <div className="mt-1 flex items-center gap-2">
+                                      {getRoleBadge(conv.recipientRole)}
+                                      <span className="text-xs text-zinc-500">{formatDate(conv.updatedAt)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          const group = item.group;
+                          const isSelected = selectedGroup?.id === group.id;
+                          return (
+                            <div
+                              key={`group-${group.id}`}
+                              onClick={() => {
+                                setSelectedConversation(null);
+                                setMessages([]);
+                                setSelectedGroup(group);
+                              }}
+                              className={`cursor-pointer rounded-xl border p-3 transition ${
+                                isSelected
+                                  ? accent.selectedConversation
+                                  : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+                              }`}
+                            >
+                              <div className="flex min-w-0 items-start justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="truncate font-semibold text-white">{group.name}</h3>
+                                    <Badge tone="neutral">Groupe</Badge>
+                                    {group.unreadCount > 0 && (
+                                      <Badge tone={accentBadgeTone}>{group.unreadCount}</Badge>
+                                    )}
+                                  </div>
+                                  <div className="mt-1 flex items-center gap-2">
+                                    <span className="text-xs text-zinc-500">{group.memberCount} membres</span>
+                                    <span className="text-xs text-zinc-500">{formatDate(group.updatedAt)}</span>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                            {conv.recipientEmail && (
-                              <p className="truncate text-xs text-zinc-500">{conv.recipientEmail}</p>
-                            )}
-                            <div className="mt-1 flex items-center gap-2">
-                              {getRoleBadge(conv.recipientRole)}
-                              <span className="text-xs text-zinc-500">
-                                {formatDate(conv.updatedAt)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
+                          );
+                        })
+                    )
                   )}
                 </div>
               </div>
@@ -874,6 +1177,97 @@ export default function UniversalMessagingPanel() {
                 </Button>
               </div>
             </>
+          ) : selectedGroup ? (
+            <>
+              <div className="flex min-w-0 items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <button
+                    onClick={() => setSelectedGroup(null)}
+                    className="rounded-lg p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white lg:hidden"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-lg font-semibold text-white">{selectedGroup.name}</h3>
+                      <Badge tone="neutral">Groupe</Badge>
+                    </div>
+                    <p className="truncate text-sm text-zinc-400">{selectedGroup.memberCount} membres</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {!isGroupConnected && <Badge tone="warning">Hors ligne</Badge>}
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-4">
+                {groupMessages.length === 0 ? (
+                  <p className="text-center text-zinc-500">Aucun message. Envoyez le premier message !</p>
+                ) : (
+                  groupMessages.map((message) => {
+                    const isMine = message.author?.id === currentUserId;
+                    const time = new Date(message.createdAt).toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+                    return (
+                      <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                        <div
+                          className={`max-w-[70%] rounded-2xl px-4 py-2 ${
+                            isMine ? accent.ownMessage : 'bg-white/10 text-white'
+                          }`}
+                        >
+                          <div className="mb-1 flex items-center gap-2">
+                            <span className="text-xs font-semibold opacity-80">{message.author?.name}</span>
+                            <span className="text-xs opacity-60">{time}</span>
+                          </div>
+                          <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+
+                {groupTypingUser && (
+                  <div className="flex justify-start">
+                    <div className="rounded-2xl bg-white/10 px-4 py-2 text-sm text-zinc-400">
+                      {groupTypingUser} est en train d'écrire...
+                    </div>
+                  </div>
+                )}
+                <div ref={groupMessagesEndRef} />
+              </div>
+
+              <div className="flex min-w-0 gap-2 border-t border-white/10 pt-4">
+                <Input
+                  type="text"
+                  placeholder="Tapez votre message..."
+                  value={newGroupMessage}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewGroupMessage(value);
+
+                    if (groupSocket && isGroupConnected && selectedGroup && value) {
+                      const now = Date.now();
+                      if (now - lastGroupTypingSentAtRef.current > 800) {
+                        lastGroupTypingSentAtRef.current = now;
+                        groupSocket.emit('typing', { room: `group:${selectedGroup.id}` });
+                      }
+                    }
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendGroupMessage();
+                    }
+                  }}
+                  className="min-w-0 flex-1"
+                />
+                <Button variant="primary" onClick={sendGroupMessage} disabled={!newGroupMessage.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </>
           ) : (
             <div className="flex h-full items-center justify-center text-zinc-500">
               <div className="text-center">
@@ -884,6 +1278,83 @@ export default function UniversalMessagingPanel() {
           )}
         </Card>
       </div>
+
+      <Modal open={isCreateGroupOpen} title="Créer un groupe" onClose={() => setIsCreateGroupOpen(false)}>
+        <Card>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Créer un groupe</h2>
+            <button
+              type="button"
+              onClick={() => setIsCreateGroupOpen(false)}
+              className="rounded-lg p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="mb-1 block text-sm text-zinc-300">Nom du groupe</label>
+              <Input
+                value={createGroupName}
+                onChange={(e) => setCreateGroupName(e.target.value)}
+                placeholder="Ex: Projet Crédit"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm text-zinc-300">Membres (conseillers + directeur)</label>
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 p-3">
+                {users
+                  .filter((u) => ['advisor', 'director'].includes(String(u.role || '').toLowerCase()))
+                  .map((u) => {
+                    const checked = createGroupMemberIds.includes(u.id);
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => toggleCreateGroupMember(u.id)}
+                        className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition ${
+                          checked ? 'bg-white/10' : 'hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-white">
+                            {u.firstName} {u.lastName}
+                          </p>
+                          <p className="truncate text-xs text-zinc-500">{u.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getRoleBadge(u.role)}
+                          <Badge tone={checked ? 'success' : 'neutral'}>{checked ? 'Ajouté' : 'Ajouter'}</Badge>
+                        </div>
+                      </button>
+                    );
+                  })}
+                {users.filter((u) => ['advisor', 'director'].includes(String(u.role || '').toLowerCase())).length === 0 && (
+                  <p className="text-sm text-zinc-400">Aucun membre disponible</p>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-zinc-500">
+                Vous êtes ajouté automatiquement au groupe.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="secondary" onClick={() => setIsCreateGroupOpen(false)}>
+                Annuler
+              </Button>
+              <Button
+                variant="primary"
+                onClick={createGroup}
+                disabled={isCreatingGroup || createGroupName.trim().length < 2 || createGroupMemberIds.length < 1}
+              >
+                {isCreatingGroup ? 'Création...' : 'Créer'}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </Modal>
     </div>
   );
 }

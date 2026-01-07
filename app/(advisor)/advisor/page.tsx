@@ -70,12 +70,6 @@ export default function AdvisorDashboard() {
 								Messages clients
 							</div>
 						</Link>
-						<Link href="/advisor/group-chat">
-							<div className="group flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-center text-xs font-semibold text-white/80 transition hover:border-white/40 hover:bg-white/10 cursor-pointer">
-								<Users className="h-5 w-5" />
-								Discussion de groupe
-							</div>
-						</Link>
 					</div>
 				</Card>
 
