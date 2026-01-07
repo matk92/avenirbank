@@ -3,6 +3,12 @@
 import { cloneElement, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 
+type A11yChildProps = {
+  id?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
+};
+
 type FormFieldProps = {
   label: string;
   htmlFor: string;
@@ -16,13 +22,20 @@ export default function FormField({ label, htmlFor, children, description, error
   const errorId = error ? `${htmlFor}-error` : undefined;
   const describedBy = [descriptionId, errorId].filter(Boolean).join(' ') || undefined;
 
-  const childWithA11y = isValidElement(children)
-    ? cloneElement(children as ReactElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean }>, {
-        id: children.props.id ?? htmlFor,
-        'aria-describedby': [children.props['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined,
-        'aria-invalid': error ? true : children.props['aria-invalid'],
-      })
-    : children;
+  const childWithA11y = (() => {
+    if (!isValidElement(children)) {
+      return children;
+    }
+
+    const element = children as ReactElement<A11yChildProps>;
+    const existingDescribedBy = element.props['aria-describedby'];
+
+    return cloneElement(element, {
+      id: element.props.id ?? htmlFor,
+      'aria-describedby': [existingDescribedBy, describedBy].filter(Boolean).join(' ') || undefined,
+      'aria-invalid': error ? true : element.props['aria-invalid'],
+    });
+  })();
 
   return (
     <div className="flex flex-col gap-2">

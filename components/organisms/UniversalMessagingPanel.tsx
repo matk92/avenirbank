@@ -1206,6 +1206,8 @@ export default function UniversalMessagingPanel() {
                 ) : (
                   groupMessages.map((message) => {
                     const isMine = message.author?.id === currentUserId;
+                    const authorRole = String(message.author?.role ?? '').toLowerCase();
+                    const isDirector = authorRole === 'director';
                     const time = new Date(message.createdAt).toLocaleTimeString('fr-FR', {
                       hour: '2-digit',
                       minute: '2-digit',
@@ -1214,11 +1216,16 @@ export default function UniversalMessagingPanel() {
                       <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <div
                           className={`max-w-[70%] rounded-2xl px-4 py-2 ${
-                            isMine ? accent.ownMessage : 'bg-white/10 text-white'
+                            isMine
+                              ? accent.ownMessage
+                              : isDirector
+                                ? 'border-l-4 border-amber-500 bg-amber-50/5 dark:bg-amber-900/20 text-white'
+                                : 'bg-white/10 text-white'
                           }`}
                         >
                           <div className="mb-1 flex items-center gap-2">
                             <span className="text-xs font-semibold opacity-80">{message.author?.name}</span>
+                            {isDirector && <Badge tone="warning">Directeur</Badge>}
                             <span className="text-xs opacity-60">{time}</span>
                           </div>
                           <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>

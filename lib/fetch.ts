@@ -1,4 +1,7 @@
-import type { NextFetchRequestConfig } from 'next/dist/server/web/spec-extension/request';
+export type NextFetchRequestConfig = {
+  revalidate?: number | false;
+  tags?: string[];
+};
 
 export const FETCH_TAGS = {
   config: 'config',
