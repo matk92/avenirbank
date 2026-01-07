@@ -266,3 +266,22 @@ export async function transferMoney(transferData: {
     toAccount: toAccountConverted,
   };
 }
+
+export async function closeAccount(accountId: string, transferToAccountId?: string): Promise<{ accountId: string; status: string; balanceTransferred?: number }> {
+  const response = await fetch(`${API_BASE_URL}/accounts/${accountId}/close`, {
+    method: 'POST',
+    headers: createHeaders(),
+    body: JSON.stringify({
+      transferToAccountId,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.error || errorData.message || `Failed to close account: ${response.statusText}`;
+    throw new Error(errorMessage);
+  }
+
+  const data = await response.json();
+  return data.data;
+}

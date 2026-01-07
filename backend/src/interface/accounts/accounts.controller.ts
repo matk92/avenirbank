@@ -25,6 +25,7 @@ import { DepositMoneyUseCase, DepositMoneyRequest } from '@application/use-cases
 import { TransferMoneyUseCase, TransferMoneyRequest } from '@application/use-cases/accounts/transfer-money.use-case';
 import { GetUserAccountsUseCase } from '@application/use-cases/accounts/get-user-accounts.use-case';
 import { RenameAccountUseCase, RenameAccountRequest } from '@application/use-cases/accounts/rename-account.use-case';
+import { CloseAccountUseCase, CloseAccountRequest } from '@application/use-cases/accounts/close-account.use-case';
 import { CreateAccountDto } from '@interface/accounts/dto/create-account.dto';
 import { DepositMoneyDto } from '@interface/accounts/dto/deposit-money.dto';
 import { TransferMoneyDto } from '@interface/accounts/dto/transfer-money.dto';
@@ -47,6 +48,7 @@ export class AccountsController {
     private readonly transferMoneyUseCase: TransferMoneyUseCase,
     private readonly getUserAccountsUseCase: GetUserAccountsUseCase,
     private readonly renameAccountUseCase: RenameAccountUseCase,
+    private readonly closeAccountUseCase: CloseAccountUseCase,
   ) {}
 
   @Get()
@@ -170,5 +172,46 @@ export class AccountsController {
       message: 'Account renamed successfully',
       data: result,
     };
+  }
+
+  @Post(':accountId/close')
+  @HttpCode(HttpStatus.OK)
+  async closeAccount(
+    @Param('accountId') accountId: string,
+    @Body() body: { transferToAccountId?: string },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    try {
+      const request: CloseAccountRequest = {
+        accountId,
+        userId: req.user.id,
+        transferToAccountId: body.transferToAccountId,
+      };
+
+      const result = await this.closeAccountUseCase.execute(request);
+      return {
+        success: true,
+        message: 'Account closed successfully',
+        data: result,
+      };
+    } catch (error) {
+      if (error.message.includes('Account has balance')) {
+        throw new BadRequestException(error.message);
+      }
+      if (error.message === 'Account not found') {
+        throw new NotFoundException('Account not found');
+      }
+      if (error.message.includes('Unauthorized')) {
+        throw new UnauthorizedException(error.message);
+      }
+      if (error.message === 'Target account not found') {
+        throw new NotFoundException('Target account not found');
+      }
+      if (error.message.includes('Target account')) {
+        throw new BadRequestException(error.message);
+      }
+      
+      throw new InternalServerErrorException('An unexpected error occurred while closing account');
+    }
   }
 }

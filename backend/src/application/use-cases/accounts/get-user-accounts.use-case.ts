@@ -35,15 +35,16 @@ export class GetUserAccountsUseCase {
 
   async execute(request: GetUserAccountsRequest): Promise<GetUserAccountsResponse> {
     // Get all accounts for the user
-    const accounts = await this.accountRepository.findByUserId(request.userId);
+    const allAccounts = await this.accountRepository.findByUserId(request.userId);
 
-    // Calculate total balance across all active accounts
-    const totalBalance = accounts
-      .filter(account => account.isActive)
-      .reduce((sum, account) => sum + account.balance, 0);
+    // Filter to only active accounts
+    const activeAccounts = allAccounts.filter(account => account.isActive);
+
+    // Calculate total balance across active accounts
+    const totalBalance = activeAccounts.reduce((sum, account) => sum + account.balance, 0);
 
     // Map to response format
-    const accountSummaries: AccountSummary[] = accounts.map(account => ({
+    const accountSummaries: AccountSummary[] = activeAccounts.map(account => ({
       id: account.id,
       iban: account.iban,
       name: account.name,
@@ -57,7 +58,7 @@ export class GetUserAccountsUseCase {
 
     return {
       accounts: accountSummaries,
-      totalAccounts: accounts.length,
+      totalAccounts: activeAccounts.length,
       totalBalance,
     };
   }

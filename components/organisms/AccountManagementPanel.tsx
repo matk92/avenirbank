@@ -14,7 +14,7 @@ import Modal from '@/components/molecules/Modal';
 import AccountSummaryCard from '@/components/molecules/AccountSummaryCard';
 import { useI18n } from '@/contexts/I18nContext';
 import { formatCurrency } from '@/lib/format';
-import { getAccounts, createAccount, depositMoney, transferMoney, renameAccount } from '@/lib/api/accounts';
+import { getAccounts, createAccount, depositMoney, transferMoney, renameAccount, closeAccount } from '@/lib/api/accounts';
 import type { Language, TranslationKey } from '@/lib/i18n';
 import type { Account } from '@/lib/types';
 
@@ -70,6 +70,9 @@ export default function AccountManagementPanel() {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [selectedAccountForDeposit, setSelectedAccountForDeposit] = useState<string | null>(null);
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [accountToClose, setAccountToClose] = useState<Account | null>(null);
+  const [selectedTransferTarget, setSelectedTransferTarget] = useState<string | null>(null);
 
   const createAccountForm = useForm<CreateAccountFormValues>({
     resolver: zodResolver(createAccountSchema),
@@ -127,12 +130,16 @@ export default function AccountManagementPanel() {
   const handleCreateAccount = createAccountForm.handleSubmit(async (values: CreateAccountFormValues) => {
     try {
       setError(null);
-      const newAccount = await createAccount({
+      await createAccount({
         name: values.name,
         type: values.type,
         initialDeposit: values.initialDeposit,
       });
-      setAccounts(prev => [...prev, newAccount]);
+      
+      // Refresh all accounts to show the new account with correct status
+      const updatedAccounts = await getAccounts();
+      setAccounts(updatedAccounts);
+      
       createAccountForm.reset();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
@@ -259,14 +266,40 @@ export default function AccountManagementPanel() {
   };
 
   const handleCloseAccount = async (accountId: string) => {
-    // Note: Backend doesn't have close account endpoint yet
-    // In a real implementation, you'd call a close account API endpoint here
+    const account = accounts.find(acc => acc.id === accountId);
+    if (!account) return;
+    
+    if (account.balance > 0) {
+      // Account has balance - show modal for transfer target selection
+      setAccountToClose(account);
+      setSelectedTransferTarget(null);
+      setIsCloseModalOpen(true);
+    } else {
+      // Account has no balance - close directly
+      try {
+        setError(null);
+        await closeAccount(accountId);
+        setAccounts(prev => prev.filter(acc => acc.id !== accountId));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to close account');
+      }
+    }
+  };
+
+  const confirmCloseAccount = async () => {
+    if (!accountToClose) return;
+    
     try {
       setError(null);
-      // For now, just update local state to mark as closed
-      setAccounts(prev => prev.map(account => 
-        account.id === accountId ? { ...account, status: 'closed' as const } : account
-      ));
+      await closeAccount(accountToClose.id, selectedTransferTarget || undefined);
+      
+      // Refresh all accounts to show updated balances
+      const updatedAccounts = await getAccounts();
+      setAccounts(updatedAccounts);
+      
+      setIsCloseModalOpen(false);
+      setAccountToClose(null);
+      setSelectedTransferTarget(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to close account');
     }
@@ -471,6 +504,61 @@ export default function AccountManagementPanel() {
               <Button type="submit">{t('accounts.transfer.submit')}</Button>
             </div>
           </form>
+        </Card>
+      </Modal>
+
+      <Modal open={isCloseModalOpen} onClose={() => setIsCloseModalOpen(false)}>
+        <Card className="w-full max-w-md">
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-white/60">Close Account</p>
+              <p className="mt-1 text-sm text-white/70">
+                {accountToClose && accountToClose.balance > 0
+                  ? language === 'fr'
+                    ? `Ce compte contient ${formatCurrency(accountToClose.balance)}. Veuillez sélectionner un compte de destination pour le solde.`
+                    : `This account contains ${formatCurrency(accountToClose.balance)}. Please select a target account for the balance.`
+                  : language === 'fr'
+                  ? 'Êtes-vous sûr de vouloir fermer ce compte ?'
+                  : 'Are you sure you want to close this account?'}
+              </p>
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setIsCloseModalOpen(false)}>
+              {t('actions.cancel')}
+            </Button>
+          </div>
+
+          {accountToClose && accountToClose.balance > 0 && (
+            <FormField label={t('accounts.transfer.to')} htmlFor="close-transfer-target">
+              <Select
+                id="close-transfer-target"
+                value={selectedTransferTarget || ''}
+                onChange={(e) => setSelectedTransferTarget(e.target.value)}
+              >
+                <option value="">{language === 'fr' ? 'Sélectionner un compte' : 'Select an account'}</option>
+                {accounts
+                  .filter(acc => acc.id !== accountToClose.id && acc.status === 'active')
+                  .map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name} ({formatCurrency(account.balance)})
+                    </option>
+                  ))}
+              </Select>
+            </FormField>
+          )}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end mt-6">
+            <Button type="button" variant="secondary" onClick={() => setIsCloseModalOpen(false)}>
+              {t('actions.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={confirmCloseAccount}
+              disabled={accountToClose !== null && accountToClose.balance > 0 && !selectedTransferTarget}
+            >
+              {language === 'fr' ? 'Fermer le compte' : 'Close Account'}
+            </Button>
+          </div>
         </Card>
       </Modal>
 
