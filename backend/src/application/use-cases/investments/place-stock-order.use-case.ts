@@ -32,6 +32,8 @@ export type ClientOrderDto = {
 @Injectable()
 export class PlaceStockOrderUseCase {
   private readonly feeCents = 100;
+  private readonly maxInt32 = 2_147_483_647;
+  private readonly maxPriceCentsInt32 = 2_000_000_000;
 
   constructor(private readonly dataSource: DataSource) {}
 
@@ -46,8 +48,26 @@ export class PlaceStockOrderUseCase {
     if (!Number.isFinite(limitPrice) || limitPrice <= 0) throw new BadRequestException('Prix limite invalide');
     if (side !== 'buy' && side !== 'sell') throw new BadRequestException('Sens invalide');
 
+    if (quantity > this.maxInt32) {
+      throw new BadRequestException('Quantité trop élevée');
+    }
+
     const limitPriceCents = Math.round(limitPrice * 100);
+    if (!Number.isSafeInteger(limitPriceCents) || limitPriceCents <= 0) {
+      throw new BadRequestException('Prix limite invalide');
+    }
+    if (limitPriceCents > this.maxPriceCentsInt32) {
+      throw new BadRequestException('Prix limite trop élevé');
+    }
     const feeCents = this.feeCents;
+
+    const formatCents = (cents: bigint) => {
+      const sign = cents < 0n ? '-' : '';
+      const abs = cents < 0n ? -cents : cents;
+      const euros = abs / 100n;
+      const rest = abs % 100n;
+      return `${sign}${euros.toString()}.${rest.toString().padStart(2, '0')} €`;
+    };
 
     return await this.dataSource.transaction(async (manager) => {
       const stocksRepo = manager.getRepository(StockTypeOrmEntity);
@@ -102,7 +122,9 @@ export class PlaceStockOrderUseCase {
         const reserved = BigInt(quantity) * BigInt(limitPriceCents);
         const required = reserved + BigInt(feeCents);
         if (walletCash < required) {
-          throw new BadRequestException('Solde insuffisant pour placer cet ordre');
+          throw new BadRequestException(
+            `Solde insuffisant pour placer cet ordre. Requis: ${formatCents(required)} (frais inclus), disponible: ${formatCents(walletCash)}.`,
+          );
         }
 
         wallet.cashCents = String(walletCash - required);

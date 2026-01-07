@@ -496,7 +496,9 @@ type ClientDataContextValue = {
   openSavings: (payload: SavingsMovementPayload) => void;
   depositSavings: (payload: SavingsMovementPayload) => void;
   withdrawSavings: (payload: SavingsMovementPayload) => void;
-  placeOrder: (payload: PlaceOrderPayload) => void;
+  placeOrder: (
+    payload: PlaceOrderPayload,
+  ) => Promise<{ ok: true; order: InvestmentOrder } | { ok: false; error: string }>;
   markNotificationRead: (id: string) => void;
   appendMessage: (payload: AppendMessagePayload) => void;
   setAdvisorTyping: (typing: boolean) => void;
@@ -606,26 +608,35 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
   const placeOrder = useCallback(async (payload: PlaceOrderPayload) => {
     const token = localStorage.getItem('token');
     if (!token) {
-      dispatch({ type: 'PLACE_ORDER', payload });
-      return;
+      return { ok: false, error: 'Vous devez être connecté pour passer un ordre.' };
     }
 
-    const response = await fetch('/api/client/investments/orders', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    let response: Response;
+    try {
+      response = await fetch('/api/client/investments/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      return { ok: false, error: 'Impossible de contacter le serveur. Réessayez.' };
+    }
 
+    const json = await response.json().catch(() => null);
     if (!response.ok) {
-      dispatch({ type: 'PLACE_ORDER', payload });
-      return;
+      const message =
+        (typeof json?.message === 'string' && json.message) ||
+        (Array.isArray(json?.message) && json.message.filter(Boolean).join(' ')) ||
+        'Ordre refusé.';
+      return { ok: false, error: message };
     }
 
-    const order = (await response.json()) as InvestmentOrder;
+    const order = json as InvestmentOrder;
     dispatch({ type: 'PREPEND_INVESTMENT_ORDER', payload: order });
+    return { ok: true, order };
   }, []);
 
   const markNotificationRead = useCallback((id: string) => {

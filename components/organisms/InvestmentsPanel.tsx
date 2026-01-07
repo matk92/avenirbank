@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -26,14 +27,21 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 export default function InvestmentsPanel() {
   const { state, loading, placeOrder } = useClientData();
   const { t, language } = useI18n();
+  const [orderFeedback, setOrderFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const orderForm = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema),
     defaultValues: { stockSymbol: '', side: 'buy', quantity: 10, limitPrice: 20 },
   });
 
-  const submitOrder = orderForm.handleSubmit((values: OrderFormValues) => {
-    placeOrder(values);
+  const submitOrder = orderForm.handleSubmit(async (values: OrderFormValues) => {
+    setOrderFeedback(null);
+    const result = await placeOrder(values);
+    if (!result.ok) {
+      setOrderFeedback({ type: 'error', message: result.error });
+      return;
+    }
+    setOrderFeedback({ type: 'success', message: t('investments.orderPlaced') });
     orderForm.reset({ ...values, quantity: 10 });
   });
 
@@ -134,6 +142,17 @@ export default function InvestmentsPanel() {
               ) : null}
             </FormField>
             <p className="text-xs text-zinc-500">{t('investments.feeNotice')}</p>
+            {orderFeedback ? (
+              <div
+                className={
+                  orderFeedback.type === 'success'
+                    ? 'rounded-2xl border border-emerald-200/60 bg-emerald-50/60 p-3 text-sm text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-200'
+                    : 'rounded-2xl border border-red-200/60 bg-red-50/60 p-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200'
+                }
+              >
+                {orderFeedback.message}
+              </div>
+            ) : null}
             <Button type="submit">{t('investments.submit')}</Button>
           </form>
         </Card>
@@ -176,6 +195,9 @@ export default function InvestmentsPanel() {
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-600 dark:text-zinc-400">
+                  <span>
+                    {t('investments.status')}: <strong>{t(`investments.status.${order.status}` as TranslationKey)}</strong>
+                  </span>
                   <span>
                     {t('investments.quantity')}: <strong>{order.quantity}</strong>
                   </span>
