@@ -17,11 +17,19 @@ export default function FormField({ label, htmlFor, children, description, error
   const describedBy = [descriptionId, errorId].filter(Boolean).join(' ') || undefined;
 
   const childWithA11y = isValidElement(children)
-    ? cloneElement(children as ReactElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean }>, {
-        id: children.props.id ?? htmlFor,
-        'aria-describedby': [children.props['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined,
-        'aria-invalid': error ? true : children.props['aria-invalid'],
-      })
+    ? cloneElement(
+        children as ReactElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean }>,
+        {
+          id: (children.props as any).id ?? htmlFor,
+          'aria-describedby': [
+            (children.props as any)['aria-describedby'],
+            describedBy,
+          ]
+            .filter(Boolean)
+            .join(' ') || undefined,
+          'aria-invalid': error ? true : (children.props as any)['aria-invalid'],
+        }
+      )
     : children;
 
   return (

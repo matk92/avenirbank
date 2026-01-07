@@ -1,5 +1,3 @@
-import type { NextFetchRequestConfig } from 'next/dist/server/web/spec-extension/request';
-
 export const FETCH_TAGS = {
   config: 'config',
   stocks: 'stocks',
@@ -8,7 +6,12 @@ export const FETCH_TAGS = {
   user: (id: string) => `user:${id}`,
 };
 
-type FetchInit = RequestInit & { next?: NextFetchRequestConfig };
+type NextCacheConfig = {
+  revalidate?: number | false;
+  tags?: string[];
+};
+
+type FetchInit = RequestInit & { next?: NextCacheConfig };
 
 type JsonResult<T> = Promise<T>;
 

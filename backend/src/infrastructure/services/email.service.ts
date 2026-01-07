@@ -33,7 +33,14 @@ export class EmailService implements IEmailService {
       html: options.html,
     };
 
-    await this.transporter.sendMail(mailOptions);
+    try {
+      await this.transporter.sendMail(mailOptions);
+    } catch (error) {
+      // Log email error but don't fail registration
+      console.warn('Email sending failed:', error.message);
+      console.warn(`Email would have been sent to: ${options.to}`);
+      // In production, you might want to queue this for retry or log to a service
+    }
   }
 
   /**
@@ -43,8 +50,8 @@ export class EmailService implements IEmailService {
    * @param name Recipient name
    */
   async sendVerificationEmail(to: string, token: string, name: string): Promise<void> {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
-    const verificationUrl = `${frontendUrl}/verify-email?token=${token}`;
+    const frontendUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+    const verificationUrl = `${frontendUrl}/verify-email/${token}`;
     
     const subject = 'AVENIR Bank - Verify Your Email Address';
     

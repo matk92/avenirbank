@@ -61,8 +61,13 @@ export default function LoginPage() {
         throw new Error('Token manquant dans la réponse');
       }
 
+      // Store in localStorage for client-side access
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
+
+      // Store in cookies for middleware authentication
+      document.cookie = `token=${data.access_token}; path=/; max-age=${7 * 24 * 60 * 60}`; // 7 days
+      document.cookie = `userRole=${data.role}; path=/; max-age=${7 * 24 * 60 * 60}`; // 7 days
 
       setSuccess(t('form.success.generic'));
       

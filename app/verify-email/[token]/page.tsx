@@ -1,24 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
-export default function VerifyEmailPage() {
+export default function VerifyEmailTokenPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-  
-  // Extract token from either query param or URL path
-  let token = searchParams.get('token');
-  if (!token) {
-    // Extract from path: /verify-email/[token]
-    const pathParts = pathname.split('/');
-    if (pathParts.length >= 3 && pathParts[1] === 'verify-email') {
-      token = pathParts[2];
-    }
-  }
+  const params = useParams();
+  const token = params.token as string;
   
   const [verificationState, setVerificationState] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -71,7 +61,7 @@ export default function VerifyEmailPage() {
     };
 
     verifyEmail();
-  }, [token]);
+  }, [token, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -89,14 +79,14 @@ export default function VerifyEmailPage() {
             <CheckCircle className="h-12 w-12 mx-auto text-green-600" />
             <h2 className="mt-4 text-xl font-semibold text-gray-900">Email Verified!</h2>
             <p className="mt-2 text-gray-600">
-              Your email has been successfully verified. You can now access all features of AVENIR Bank.
+              Your email has been successfully verified. Redirecting to login...
             </p>
             <div className="mt-6">
               <Link 
-                href="/dashboard" 
+                href="/login" 
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                Go to Dashboard
+                Go to Login
               </Link>
             </div>
           </div>
