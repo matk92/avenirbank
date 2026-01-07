@@ -44,8 +44,15 @@ services:
     container_name: avenirbank-backend-prod
     environment:
       - NODE_ENV=production
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=avenir
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+      - DATABASE_NAME=avenirbank
       - DATABASE_URL=postgresql://avenir:${POSTGRES_PASSWORD}@postgres:5432/avenirbank
       - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - JWT_SECRET=${JWT_SECRET}
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=${EMAIL_PORT}
