@@ -76,7 +76,12 @@ export default function ChatWindow({
 
     socket.socket.on('new-message', (message: Message) => {
       if (message.conversationId === conversationId) {
-        setMessages((prev) => [...prev, message]);
+        setMessages((prev) => {
+          if (prev.some(m => m.id === message.id)) {
+            return prev;
+          }
+          return [...prev, message];
+        });
 
         if (message.senderRole === 'client') {
           socket.socket?.emit('mark-read', { conversationId: message.conversationId });

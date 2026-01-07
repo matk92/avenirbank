@@ -68,7 +68,7 @@ export default function MessagingPanel() {
     const fetchConversation = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:3001/client/conversation', {
+        const response = await fetch('/api/client/conversation', {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (response.ok) {
@@ -85,7 +85,7 @@ export default function MessagingPanel() {
     const fetchMessages = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:3001/client/messages', {
+        const response = await fetch('/api/client/messages', {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (response.ok) {
@@ -120,7 +120,12 @@ export default function MessagingPanel() {
 
     socket.on('new-message', (message: Message) => {
       if (message.conversationId === conversation.id) {
-        setMessages((prev) => [...prev, message]);
+        setMessages((prev) => {
+          if (prev.some(m => m.id === message.id)) {
+            return prev;
+          }
+          return [...prev, message];
+        });
         if (message.senderRole !== 'client') {
           socket.emit('mark-read', { conversationId: message.conversationId });
         }

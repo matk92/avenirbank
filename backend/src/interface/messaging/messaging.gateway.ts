@@ -175,7 +175,10 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       read: message.read,
     };
 
-    this.server.to(`conversation:${data.conversationId}`).emit('new-message', messagePayload);
+    this.server.in(`conversation:${data.conversationId}`).emit('new-message', messagePayload);
+
+    client.emit('new-message', messagePayload);
+    
     this.server.to(`user:${recipientId}`).emit('message-notification', {
       conversationId: data.conversationId,
       message: 'Vous avez un message en attente',

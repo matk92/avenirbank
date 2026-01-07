@@ -230,7 +230,9 @@ export class GroupChatGateway implements OnGatewayConnection, OnGatewayDisconnec
       createdAt: message.createdAt.toISOString(),
     };
 
-    this.server.to(data.room).emit('group-message', messagePayload);
+    this.server.in(data.room).emit('group-message', messagePayload);
+
+    client.emit('group-message', messagePayload);
 
     if (groupId) {
       const members = await this.messageGroupMemberRepository.find({ where: { groupId } });

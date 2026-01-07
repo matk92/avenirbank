@@ -198,13 +198,16 @@ export default function FullMessagingPanel() {
         body: JSON.stringify({ clientId }),
       });
 
-      if (response.ok) {
-        const conversation = await response.json();
-        await fetchConversations();
-        setSelectedConversation(conversation);
-        setActiveTab('conversations');
-        await fetchMessages(conversation.id);
+      if (!response.ok) {
+        console.error('Failed to start conversation:', response.status, await response.text());
+        return;
       }
+
+      const conversation = await response.json();
+      await fetchConversations();
+      setSelectedConversation(conversation);
+      setActiveTab('conversations');
+      await fetchMessages(conversation.id);
     } catch (error) {
       console.error('Error starting conversation:', error);
     }
@@ -276,7 +279,12 @@ export default function FullMessagingPanel() {
 
     socket.on('new-message', (message: Message) => {
       if (selectedConversation && message.conversationId === selectedConversation.id) {
-        setMessages(prev => [...prev, message]);
+        setMessages(prev => {
+          if (prev.some(m => m.id === message.id)) {
+            return prev;
+          }
+          return [...prev, message];
+        });
 
         if (message.senderRole === 'client') {
           setNewIncomingIndicator(true);

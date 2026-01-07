@@ -292,13 +292,16 @@ export default function UniversalMessagingPanel() {
         body: JSON.stringify({ userId }),
       });
 
-      if (response.ok) {
-        const conversation = await response.json();
-        await fetchConversations();
-        setSelectedConversation(conversation);
-        setActiveTab('conversations');
-        await fetchMessages(conversation.id);
+      if (!response.ok) {
+        console.error('Failed to start conversation:', response.status, await response.text());
+        return;
       }
+
+      const conversation = await response.json();
+      await fetchConversations();
+      setSelectedConversation(conversation);
+      setActiveTab('conversations');
+      await fetchMessages(conversation.id);
     } catch (error) {
       console.error('Error starting conversation:', error);
     }
@@ -459,7 +462,12 @@ export default function UniversalMessagingPanel() {
 
     socket.on('new-message', (message: Message) => {
       if (selectedConversation && message.conversationId === selectedConversation.id) {
-        setMessages((prev) => [...prev, message]);
+        setMessages((prev) => {
+          if (prev.some(m => m.id === message.id)) {
+            return prev;
+          }
+          return [...prev, message];
+        });
         if (message.senderId !== currentUserId) {
           setNewIncomingIndicator(true);
           if (newIncomingTimeoutRef.current) clearTimeout(newIncomingTimeoutRef.current);
@@ -548,7 +556,12 @@ export default function UniversalMessagingPanel() {
       const groupId = typeof room === 'string' && room.startsWith('group:') ? room.slice('group:'.length) : null;
 
       if (selectedGroup && groupId === selectedGroup.id) {
-        setGroupMessages((prev) => [...prev, message]);
+        setGroupMessages((prev) => {
+          if (prev.some(m => m.id === message.id)) {
+            return prev;
+          }
+          return [...prev, message];
+        });
         if (message.author?.id !== currentUserId) {
           const token = localStorage.getItem('token');
           void fetch(`/api/messages/groups/${selectedGroup.id}/read`, {
