@@ -721,39 +721,44 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SAVINGS_WITHDRAW', payload });
   }, []);
 
-  const placeOrder = useCallback(async (payload: PlaceOrderPayload) => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      return { ok: false, error: 'Vous devez être connecté pour passer un ordre.' };
-    }
+  const placeOrder = useCallback(
+    async (
+      payload: PlaceOrderPayload,
+    ): Promise<{ ok: true; order: InvestmentOrder } | { ok: false; error: string }> => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return { ok: false, error: 'Vous devez être connecté pour passer un ordre.' };
+      }
 
-    let response: Response;
-    try {
-      response = await fetch('/api/client/investments/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-    } catch {
-      return { ok: false, error: 'Impossible de contacter le serveur. Réessayez.' };
-    }
+      let response: Response;
+      try {
+        response = await fetch('/api/client/investments/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        return { ok: false, error: 'Impossible de contacter le serveur. Réessayez.' };
+      }
 
-    const json = await response.json().catch(() => null);
-    if (!response.ok) {
-      const message =
-        (typeof json?.message === 'string' && json.message) ||
-        (Array.isArray(json?.message) && json.message.filter(Boolean).join(' ')) ||
-        'Ordre refusé.';
-      return { ok: false, error: message };
-    }
+      const json = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          (typeof json?.message === 'string' && json.message) ||
+          (Array.isArray(json?.message) && json.message.filter(Boolean).join(' ')) ||
+          'Ordre refusé.';
+        return { ok: false, error: message };
+      }
 
-    const order = json as InvestmentOrder;
-    dispatch({ type: 'PREPEND_INVESTMENT_ORDER', payload: order });
-    return { ok: true, order };
-  }, []);
+      const order = json as InvestmentOrder;
+      dispatch({ type: 'PREPEND_INVESTMENT_ORDER', payload: order });
+      return { ok: true, order };
+    },
+    [],
+  );
 
   const markNotificationRead = useCallback((id: string) => {
     dispatch({ type: 'MARK_NOTIFICATION_READ', payload: { id } });

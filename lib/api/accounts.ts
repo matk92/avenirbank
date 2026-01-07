@@ -244,7 +244,7 @@ export async function transferMoney(transferData: {
     name: data.data.fromAccount.name,
     iban: data.data.fromAccount.iban,
     balance: parseFloat(data.data.fromAccount.balance?.toString() || '0'),
-    currency: data.data.fromAccount.currency || 'EUR',
+    currency: 'EUR',
     type: 'checking', // Default since backend doesn't return type in transfer response
     status: 'active', // Default since backend doesn't return status in transfer response
     createdAt: new Date().toISOString(),
@@ -255,7 +255,7 @@ export async function transferMoney(transferData: {
     name: data.data.toAccount.name,
     iban: data.data.toAccount.iban,
     balance: parseFloat(data.data.toAccount.balance?.toString() || '0'),
-    currency: data.data.toAccount.currency || 'EUR',
+    currency: 'EUR',
     type: 'checking', // Default since backend doesn't return type in transfer response
     status: 'active', // Default since backend doesn't return status in transfer response
     createdAt: new Date().toISOString(),
