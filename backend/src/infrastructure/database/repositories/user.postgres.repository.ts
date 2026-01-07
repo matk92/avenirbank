@@ -107,6 +107,16 @@ export class UserPostgresRepository implements IUserRepository {
     });
     return count > 0;
   }
+  
+  /**
+   * Find user by email confirmation token
+   */
+  async findByEmailConfirmationToken(token: string): Promise<User | null> {
+    const entity = await this.typeOrmRepository.findOne({
+      where: { emailConfirmationToken: token },
+    });
+    return entity ? this.toDomain(entity) : null;
+  }
 
   /**
    * Convert domain User to TypeORM entity (persistence)

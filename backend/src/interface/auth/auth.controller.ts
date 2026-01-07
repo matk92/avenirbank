@@ -1,9 +1,10 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, Req, UseGuards, Param } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterUseCase } from '@application/use-cases/auth/register.use-case';
 import { LoginUseCase } from '@application/use-cases/auth/login.use-case';
+import { ConfirmEmailUseCase } from '@application/use-cases/email-verification/confirm-email.use-case';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { Request } from 'express';
 
@@ -31,6 +32,7 @@ export class AuthController {
     private readonly registerUseCase: RegisterUseCase,
     private readonly loginUseCase: LoginUseCase,
     private readonly jwtService: JwtService,
+    private readonly confirmEmailUseCase: ConfirmEmailUseCase,
   ) {}
 
   @Post('register')
@@ -44,7 +46,7 @@ export class AuthController {
     });
 
     return {
-      message: 'User registered successfully',
+      message: 'User registered successfully. Please check your email for a verification link.',
       user: {
         id: result.id,
         email: result.email,
@@ -85,5 +87,12 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async me(@Req() req: Request) {
     return { user: (req as any).user };
+  }
+  
+  @Get('verify-email/:token')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmailGet(@Param('token') token: string): Promise<{ message: string }> {
+    await this.confirmEmailUseCase.execute(token);
+    return { message: 'Email verified successfully' };
   }
 }
