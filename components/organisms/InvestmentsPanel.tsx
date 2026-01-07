@@ -24,7 +24,7 @@ const orderSchema = z.object({
 type OrderFormValues = z.infer<typeof orderSchema>;
 
 export default function InvestmentsPanel() {
-  const { state, placeOrder } = useClientData();
+  const { state, loading, placeOrder } = useClientData();
   const { t, language } = useI18n();
 
   const orderForm = useForm<OrderFormValues>({
@@ -44,15 +44,26 @@ export default function InvestmentsPanel() {
         <Card className="lg:col-span-2">
           <h3 className="mb-4 text-base font-semibold text-zinc-900 dark:text-zinc-100">{t('investments.available')}</h3>
           <div className="grid gap-4 md:grid-cols-3">
-            {state.stocks.map((stock) => (
-              <div key={stock.symbol} className="rounded-2xl bg-emerald-50/60 p-4 dark:bg-emerald-900/30">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">{stock.symbol}</p>
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{stock.name}</p>
-                <p className="text-lg font-semibold text-emerald-800 dark:text-emerald-300">
-                  {formatCurrency(stock.lastPrice, language)}
-                </p>
-              </div>
-            ))}
+            {loading.stocks
+              ? Array.from({ length: 3 }).map((_, index) => (
+                  <div
+                    key={`stock-skeleton-${index}`}
+                    className="animate-pulse rounded-2xl bg-emerald-50/60 p-4 dark:bg-emerald-900/30"
+                  >
+                    <div className="h-3 w-12 rounded bg-emerald-200/70 dark:bg-emerald-700/40" />
+                    <div className="mt-3 h-4 w-28 rounded bg-zinc-200/70 dark:bg-zinc-700/60" />
+                    <div className="mt-4 h-6 w-20 rounded bg-emerald-200/70 dark:bg-emerald-700/40" />
+                  </div>
+                ))
+              : state.stocks.map((stock) => (
+                  <div key={stock.symbol} className="rounded-2xl bg-emerald-50/60 p-4 dark:bg-emerald-900/30">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">{stock.symbol}</p>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{stock.name}</p>
+                    <p className="text-lg font-semibold text-emerald-800 dark:text-emerald-300">
+                      {formatCurrency(stock.lastPrice, language)}
+                    </p>
+                  </div>
+                ))}
           </div>
         </Card>
         <Card>
@@ -130,7 +141,24 @@ export default function InvestmentsPanel() {
 
       <Card>
         <h3 className="mb-4 text-base font-semibold text-zinc-900 dark:text-zinc-100">{t('investments.orders')}</h3>
-        {state.investmentOrders.length === 0 ? (
+        {loading.investmentOrders ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={`order-skeleton-${index}`}
+                className="animate-pulse rounded-2xl border border-zinc-100 p-4 dark:border-zinc-700"
+              >
+                <div className="h-4 w-40 rounded bg-zinc-200/70 dark:bg-zinc-700/60" />
+                <div className="mt-2 h-3 w-24 rounded bg-zinc-200/70 dark:bg-zinc-700/60" />
+                <div className="mt-4 flex flex-wrap gap-4">
+                  <div className="h-4 w-28 rounded bg-zinc-200/70 dark:bg-zinc-700/60" />
+                  <div className="h-4 w-28 rounded bg-zinc-200/70 dark:bg-zinc-700/60" />
+                  <div className="h-4 w-28 rounded bg-zinc-200/70 dark:bg-zinc-700/60" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : state.investmentOrders.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('investments.noOrders')}</p>
         ) : (
           <div className="space-y-3">

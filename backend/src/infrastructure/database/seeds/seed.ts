@@ -1,15 +1,20 @@
 import { DataSource } from 'typeorm';
 import { hash } from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
 import { UserTypeOrmEntity, UserRoleEnum } from '../entities/user.typeorm.entity';
 import { ConversationTypeOrmEntity, ConversationStatusEnum } from '../entities/conversation.typeorm.entity';
 import { MessageTypeOrmEntity } from '../entities/message.typeorm.entity';
 import { NotificationTypeOrmEntity } from '../entities/notification.typeorm.entity';
 import { ActivityTypeOrmEntity } from '../entities/activity.typeorm.entity';
 import { GroupMessageTypeOrmEntity } from '../entities/group-message.typeorm.entity';
+import { StockTypeOrmEntity } from '../entities/stock.typeorm.entity';
+import { InvestmentWalletTypeOrmEntity } from '../entities/investment-wallet.typeorm.entity';
+import { StockHoldingTypeOrmEntity } from '../entities/stock-holding.typeorm.entity';
 // Import all migrations
 import { CreateUsersTable1730000000000 } from '../migrations/1730000000000-create-users-table';
 import { CreateMessagingTables1730000000001 } from '../migrations/1730000000001-create-messaging-tables';
 import { UpdateConversationsForAllUsers1730000000002 } from '../migrations/1730000000002-update-conversations-for-all-users';
+import { CreateInvestmentTables1730000000003 } from '../migrations/1730000000003-create-investment-tables';
 
 function parseDatabaseUrl(databaseUrl: string) {
   const url = new URL(databaseUrl);
@@ -40,11 +45,15 @@ async function seed() {
       NotificationTypeOrmEntity,
       ActivityTypeOrmEntity,
       GroupMessageTypeOrmEntity,
+      StockTypeOrmEntity,
+      InvestmentWalletTypeOrmEntity,
+      StockHoldingTypeOrmEntity,
     ],
     migrations: [
       CreateUsersTable1730000000000,
       CreateMessagingTables1730000000001,
       UpdateConversationsForAllUsers1730000000002,
+      CreateInvestmentTables1730000000003,
     ],
     logging: true,
   });
@@ -58,6 +67,9 @@ async function seed() {
   const notificationRepo = dataSource.getRepository(NotificationTypeOrmEntity);
   const activityRepo = dataSource.getRepository(ActivityTypeOrmEntity);
   const groupMessageRepo = dataSource.getRepository(GroupMessageTypeOrmEntity);
+  const stockRepo = dataSource.getRepository(StockTypeOrmEntity);
+  const walletRepo = dataSource.getRepository(InvestmentWalletTypeOrmEntity);
+  const holdingRepo = dataSource.getRepository(StockHoldingTypeOrmEntity);
 
   const directorEmail = process.env.SEED_DIRECTOR_EMAIL ?? 'director@avenir.test';
   const directorPassword = process.env.SEED_DIRECTOR_PASSWORD ?? 'Director123!';
@@ -74,6 +86,13 @@ async function seed() {
   }) => {
     const existing = await userRepo.findOne({ where: { email: input.email } });
     if (existing) {
+      existing.firstName = input.firstName;
+      existing.lastName = input.lastName;
+      existing.role = input.role;
+      existing.isEmailConfirmed = true;
+      existing.isBanned = false;
+      existing.passwordHash = await hash(input.password, 10);
+      await userRepo.save(existing);
       return existing;
     }
 
@@ -130,6 +149,60 @@ async function seed() {
     lastName: 'Martin',
     role: UserRoleEnum.CLIENT,
   });
+
+  const ensureWallet = async (userId: string, cashCents: bigint) => {
+    const existing = await walletRepo.findOne({ where: { userId } });
+    if (existing) return existing;
+    const entity = new InvestmentWalletTypeOrmEntity();
+    entity.userId = userId;
+    entity.cashCents = String(cashCents);
+    await walletRepo.save(entity);
+    return entity;
+  };
+
+  await ensureWallet(director.id, 0n);
+  await ensureWallet(advisor.id, 0n);
+  await ensureWallet(client1.id, 250_000n);
+  await ensureWallet(client2.id, 120_000n);
+
+  const ensureStock = async (input: { id: string; symbol: string; name: string; priceCents: number; isAvailable: boolean }) => {
+    const existing = await stockRepo.findOne({ where: { id: input.id } });
+    if (existing) return existing;
+    const entity = new StockTypeOrmEntity();
+    entity.id = input.id;
+    entity.symbol = input.symbol;
+    entity.name = input.name;
+    entity.isAvailable = input.isAvailable;
+    entity.initialPriceCents = input.priceCents;
+    entity.lastPriceCents = input.priceCents;
+    await stockRepo.save(entity);
+    return entity;
+  };
+
+  await ensureStock({ id: '00000000-0000-0000-0100-000000000001', symbol: 'AVA', name: 'Avenir Alliance', priceCents: 4215, isAvailable: true });
+  const stockNeo = await ensureStock({ id: '00000000-0000-0000-0100-000000000002', symbol: 'NEO', name: 'Neo Energie', priceCents: 1840, isAvailable: true });
+  const stockSol = await ensureStock({ id: '00000000-0000-0000-0100-000000000003', symbol: 'SOL', name: 'Solidarité Tech', priceCents: 6790, isAvailable: true });
+
+  const ensureHolding = async (userId: string, stockId: string, qty: number) => {
+    const existing = await holdingRepo.findOne({ where: { userId, stockId } });
+    if (existing) {
+      if (existing.quantity !== qty) {
+        existing.quantity = qty;
+        await holdingRepo.save(existing);
+      }
+      return existing;
+    }
+    const entity = new StockHoldingTypeOrmEntity();
+    entity.id = uuidv4();
+    entity.userId = userId;
+    entity.stockId = stockId;
+    entity.quantity = qty;
+    await holdingRepo.save(entity);
+    return entity;
+  };
+
+  await ensureHolding(client2.id, stockNeo.id, 15);
+  await ensureHolding(client1.id, stockSol.id, 5);
 
 
 

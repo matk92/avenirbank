@@ -15,6 +15,10 @@ Au démarrage, le backend exécute automatiquement un seed idempotent (création
 
 - Director: `director@avenir.test` / `Director123!`
 - Advisor: `advisor@avenir.test` / `Advisor123!`
+- Client: `client1@avenir.test` / `Client123!`
+- Client: `client2@avenir.test` / `Client123!`
+
+Le seed crée aussi des **actions** de démo (AVA / NEO / SOL) pour tester la partie investissement.
 
 Si besoin, vous pouvez relancer manuellement:
 

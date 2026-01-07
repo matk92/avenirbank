@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useMemo, useReducer, useCallback } from 'react';
+import { createContext, useContext, useMemo, useReducer, useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { generateIban } from '@/lib/iban';
 import { accrueSavingsBalance, calculateOrderTotal } from '@/lib/finance';
@@ -92,6 +92,9 @@ type ClientDataAction =
   | { type: 'SAVINGS_DEPOSIT'; payload: SavingsMovementPayload }
   | { type: 'SAVINGS_WITHDRAW'; payload: SavingsMovementPayload }
   | { type: 'PLACE_ORDER'; payload: PlaceOrderPayload }
+  | { type: 'SET_STOCKS'; payload: Stock[] }
+  | { type: 'SET_INVESTMENT_ORDERS'; payload: InvestmentOrder[] }
+  | { type: 'PREPEND_INVESTMENT_ORDER'; payload: InvestmentOrder }
   | { type: 'MARK_NOTIFICATION_READ'; payload: { id: string } }
   | { type: 'APPEND_MESSAGE'; payload: AppendMessagePayload }
   | { type: 'SET_ADVISOR_TYPING'; payload: { typing: boolean } };
@@ -448,6 +451,15 @@ function clientDataReducer(state: ClientDataState, action: ClientDataAction): Cl
         investmentOrders: [order, ...state.investmentOrders],
       };
     }
+    case 'SET_STOCKS': {
+      return { ...state, stocks: action.payload };
+    }
+    case 'SET_INVESTMENT_ORDERS': {
+      return { ...state, investmentOrders: action.payload };
+    }
+    case 'PREPEND_INVESTMENT_ORDER': {
+      return { ...state, investmentOrders: [action.payload, ...state.investmentOrders] };
+    }
     case 'MARK_NOTIFICATION_READ': {
       const notifications = state.notifications.map((notification) =>
         notification.id === action.payload.id ? { ...notification, read: true } : notification,
@@ -473,6 +485,10 @@ function clientDataReducer(state: ClientDataState, action: ClientDataAction): Cl
 
 type ClientDataContextValue = {
   state: ClientDataState;
+  loading: {
+    stocks: boolean;
+    investmentOrders: boolean;
+  };
   createAccount: (payload: CreateAccountPayload) => void;
   renameAccount: (payload: RenameAccountPayload) => void;
   closeAccount: (payload: CloseAccountPayload) => void;
@@ -490,6 +506,74 @@ const ClientDataContext = createContext<ClientDataContextValue | undefined>(unde
 
 export function ClientDataProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(clientDataReducer, undefined, createInitialState);
+  const [token, setToken] = useState<string | null>(null);
+  const [loadingStocks, setLoadingStocks] = useState(false);
+  const [loadingInvestmentOrders, setLoadingInvestmentOrders] = useState(false);
+
+  useEffect(() => {
+    setToken(localStorage.getItem('token'));
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'token') {
+        setToken(event.newValue);
+      }
+    };
+
+    window.addEventListener('storage', onStorage);
+
+    const poll = window.setInterval(() => {
+      const current = localStorage.getItem('token');
+      setToken((prev) => (prev === current ? prev : current));
+    }, 250);
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(poll);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+
+    dispatch({ type: 'SET_STOCKS', payload: [] });
+    dispatch({ type: 'SET_INVESTMENT_ORDERS', payload: [] });
+    setLoadingStocks(true);
+    setLoadingInvestmentOrders(true);
+
+    let cancelled = false;
+
+    fetch('/api/client/stocks', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          dispatch({ type: 'SET_STOCKS', payload: data });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingStocks(false);
+      });
+
+    fetch('/api/client/investments/orders', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          dispatch({ type: 'SET_INVESTMENT_ORDERS', payload: data });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingInvestmentOrders(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const createAccount = useCallback((payload: CreateAccountPayload) => {
     dispatch({ type: 'CREATE_ACCOUNT', payload });
@@ -519,8 +603,29 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SAVINGS_WITHDRAW', payload });
   }, []);
 
-  const placeOrder = useCallback((payload: PlaceOrderPayload) => {
-    dispatch({ type: 'PLACE_ORDER', payload });
+  const placeOrder = useCallback(async (payload: PlaceOrderPayload) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      dispatch({ type: 'PLACE_ORDER', payload });
+      return;
+    }
+
+    const response = await fetch('/api/client/investments/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      dispatch({ type: 'PLACE_ORDER', payload });
+      return;
+    }
+
+    const order = (await response.json()) as InvestmentOrder;
+    dispatch({ type: 'PREPEND_INVESTMENT_ORDER', payload: order });
   }, []);
 
   const markNotificationRead = useCallback((id: string) => {
@@ -538,6 +643,7 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ClientDataContextValue>(
     () => ({
       state,
+      loading: { stocks: loadingStocks, investmentOrders: loadingInvestmentOrders },
       createAccount,
       renameAccount,
       closeAccount,
@@ -550,7 +656,22 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
       appendMessage,
       setAdvisorTyping,
     }),
-    [state, createAccount, renameAccount, closeAccount, transfer, openSavings, depositSavings, withdrawSavings, placeOrder, markNotificationRead, appendMessage, setAdvisorTyping],
+    [
+      state,
+      loadingStocks,
+      loadingInvestmentOrders,
+      createAccount,
+      renameAccount,
+      closeAccount,
+      transfer,
+      openSavings,
+      depositSavings,
+      withdrawSavings,
+      placeOrder,
+      markNotificationRead,
+      appendMessage,
+      setAdvisorTyping,
+    ],
   );
 
   return <ClientDataContext.Provider value={value}>{children}</ClientDataContext.Provider>;
