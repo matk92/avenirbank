@@ -34,6 +34,16 @@ export default function InvestmentsPanel() {
     defaultValues: { stockSymbol: '', side: 'buy', quantity: 10, limitPrice: 20 },
   });
 
+  const watchedSide = orderForm.watch('side');
+  const watchedQuantity = orderForm.watch('quantity');
+  const watchedLimitPrice = orderForm.watch('limitPrice');
+
+  const feeAmount = 1;
+  const quantity = Number.isFinite(watchedQuantity) ? watchedQuantity : 0;
+  const limitPrice = Number.isFinite(watchedLimitPrice) ? watchedLimitPrice : 0;
+  const gross = quantity * limitPrice;
+  const estimatedTotal = watchedSide === 'sell' ? Math.max(0, gross - feeAmount) : gross + feeAmount;
+
   const submitOrder = orderForm.handleSubmit(async (values: OrderFormValues) => {
     setOrderFeedback(null);
     const result = await placeOrder(values);
@@ -142,6 +152,16 @@ export default function InvestmentsPanel() {
               ) : null}
             </FormField>
             <p className="text-xs text-zinc-500">{t('investments.feeNotice')}</p>
+
+            <div className="rounded-2xl border border-zinc-100 bg-zinc-50/40 p-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium">
+                  {t(watchedSide === 'sell' ? 'investments.estimatedTotal.sell' : 'investments.estimatedTotal.buy')}
+                </span>
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">{formatCurrency(estimatedTotal, language)}</span>
+              </div>
+            </div>
+
             {orderFeedback ? (
               <div
                 className={

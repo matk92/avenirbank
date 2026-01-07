@@ -100,6 +100,8 @@ const baseTranslations = {
     "investments.status.cancelled": "Annulé",
     "investments.submit": "Valider l’ordre",
     "investments.feeNotice": "Frais fixes : 1 € par ordre.",
+    "investments.estimatedTotal.buy": "Total estimé (frais inclus)",
+    "investments.estimatedTotal.sell": "Produit estimé (frais déduits)",
   "investments.fees": "Frais",
     "investments.noOrders": "Aucun ordre pour le moment.",
 
@@ -277,6 +279,8 @@ const baseTranslations = {
     "investments.status.cancelled": "Cancelled",
     "investments.submit": "Confirm order",
     "investments.feeNotice": "Flat fee: €1 per order.",
+    "investments.estimatedTotal.buy": "Estimated total (fees included)",
+    "investments.estimatedTotal.sell": "Estimated proceeds (fees deducted)",
   "investments.fees": "Fees",
     "investments.noOrders": "No orders yet.",
 
