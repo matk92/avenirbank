@@ -7,6 +7,7 @@ import { StockHoldingTypeOrmEntity } from '@infrastructure/database/entities/sto
 import { StockOrderTypeOrmEntity } from '@infrastructure/database/entities/stock-order.typeorm.entity';
 import { StockTradeTypeOrmEntity } from '@infrastructure/database/entities/stock-trade.typeorm.entity';
 import { InvestmentWalletTypeOrmEntity } from '@infrastructure/database/entities/investment-wallet.typeorm.entity';
+import { AccountTypeOrmEntity } from '@infrastructure/database/entities/account.typeorm.entity';
 import { CreateStockUseCase } from '@application/use-cases/stocks/create-stock.use-case';
 import { ListDirectorStocksUseCase } from '@application/use-cases/stocks/list-director-stocks.use-case';
 import { ToggleStockAvailabilityUseCase } from '@application/use-cases/stocks/toggle-stock-availability.use-case';
@@ -24,6 +25,7 @@ import { RolesGuard } from '@interface/auth/roles.guard';
       StockOrderTypeOrmEntity,
       StockTradeTypeOrmEntity,
       InvestmentWalletTypeOrmEntity,
+      AccountTypeOrmEntity,
     ]),
   ],
   controllers: [DirectorStocksController, ClientInvestmentsController],

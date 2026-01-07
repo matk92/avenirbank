@@ -21,13 +21,13 @@ export class ClientInvestmentsController {
 
   @Get('client/investments/orders')
   async orders(@Req() req: Request) {
-    const userId = String((req as any).user?.sub);
+    const userId = String((req as any).user?.id);
     return await this.listOrders.execute(userId);
   }
 
   @Post('client/investments/orders')
   async createOrder(@Req() req: Request, @Body() body: { stockSymbol: string; side: 'buy' | 'sell'; quantity: number; limitPrice: number }) {
-    const userId = String((req as any).user?.sub);
+    const userId = String((req as any).user?.id);
     return await this.placeOrder.execute(userId, body);
   }
 }

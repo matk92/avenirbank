@@ -90,6 +90,10 @@ async function seed() {
       existing.lastName = input.lastName;
       existing.role = input.role;
       existing.isEmailConfirmed = true;
+      // Ensure seeded users are always considered verified.
+      // Explicitly clear any verification token/expiry that may exist from previous runs.
+      (existing as any).emailConfirmationToken = null;
+      (existing as any).emailConfirmationTokenExpiry = null;
       existing.isBanned = false;
       existing.passwordHash = await hash(input.password, 10);
       await userRepo.save(existing);
@@ -104,6 +108,9 @@ async function seed() {
     entity.passwordHash = await hash(input.password, 10);
     entity.role = input.role;
     entity.isEmailConfirmed = true;
+    // Keep the DB clean: no pending verification token for seed users.
+    (entity as any).emailConfirmationToken = null;
+    (entity as any).emailConfirmationTokenExpiry = null;
     entity.isBanned = false;
     await userRepo.save(entity);
     return entity;

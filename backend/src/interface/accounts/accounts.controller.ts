@@ -29,7 +29,9 @@ import { CloseAccountUseCase, CloseAccountRequest } from '@application/use-cases
 import { CreateAccountDto } from '@interface/accounts/dto/create-account.dto';
 import { DepositMoneyDto } from '@interface/accounts/dto/deposit-money.dto';
 import { TransferMoneyDto } from '@interface/accounts/dto/transfer-money.dto';
+import { TransferToClientMainDto } from '@interface/accounts/dto/transfer-to-client-main.dto';
 import { RenameAccountDto } from '@interface/accounts/dto/rename-account.dto';
+import { TransferToClientMainUseCase, TransferToClientMainRequest } from '@application/use-cases/accounts/transfer-to-client-main.use-case';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -46,6 +48,7 @@ export class AccountsController {
     private readonly createAccountUseCase: CreateAccountUseCase,
     private readonly depositMoneyUseCase: DepositMoneyUseCase,
     private readonly transferMoneyUseCase: TransferMoneyUseCase,
+    private readonly transferToClientMainUseCase: TransferToClientMainUseCase,
     private readonly getUserAccountsUseCase: GetUserAccountsUseCase,
     private readonly renameAccountUseCase: RenameAccountUseCase,
     private readonly closeAccountUseCase: CloseAccountUseCase,
@@ -149,6 +152,63 @@ export class AccountsController {
       }
       
       // Re-throw unknown errors as internal server errors
+      throw new InternalServerErrorException('An unexpected error occurred during transfer');
+    }
+  }
+
+  @Post('transfer-to-client-main')
+  @HttpCode(HttpStatus.OK)
+  async transferToClientMain(
+    @Body() dto: TransferToClientMainDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    try {
+      const request: TransferToClientMainRequest = {
+        fromAccountId: dto.fromAccountId,
+        recipientEmail: dto.recipientEmail,
+        amount: dto.amount,
+        reference: dto.reference,
+        userId: req.user.id,
+      };
+
+      const result = await this.transferToClientMainUseCase.execute(request);
+      return {
+        success: true,
+        message: 'Transfer completed successfully',
+        data: result,
+      };
+    } catch (error) {
+      if (error.message === 'Insufficient funds in source account') {
+        throw new BadRequestException('Insufficient funds in source account');
+      }
+      if (error.message === 'Source account not found') {
+        throw new NotFoundException('Source account not found');
+      }
+      if (error.message === 'Recipient not found') {
+        throw new NotFoundException('Recipient not found');
+      }
+      if (error.message === 'Recipient has no active account') {
+        throw new BadRequestException('Recipient has no active account');
+      }
+      if (error.message.includes('Unauthorized')) {
+        throw new UnauthorizedException(error.message);
+      }
+      if (error.message.includes('Transfer amount must be positive')) {
+        throw new BadRequestException('Transfer amount must be positive');
+      }
+      if (error.message.includes('cannot exceed')) {
+        throw new BadRequestException(error.message);
+      }
+      if (error.message.includes('inactive')) {
+        throw new BadRequestException(error.message);
+      }
+      if (error.message.includes('Currency mismatch')) {
+        throw new BadRequestException(error.message);
+      }
+      if (error.message.includes('Cannot transfer')) {
+        throw new BadRequestException(error.message);
+      }
+
       throw new InternalServerErrorException('An unexpected error occurred during transfer');
     }
   }

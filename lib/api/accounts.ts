@@ -267,6 +267,62 @@ export async function transferMoney(transferData: {
   };
 }
 
+export async function transferToClientMain(transferData: {
+  fromAccountId: string;
+  recipientEmail: string;
+  amount: number;
+  description: string;
+}): Promise<{ fromAccount: Account; toAccount: Account }> {
+  const backendData = {
+    fromAccountId: transferData.fromAccountId,
+    recipientEmail: transferData.recipientEmail,
+    amount: transferData.amount,
+    reference: transferData.description,
+  };
+
+  const response = await fetch(`${API_BASE_URL}/accounts/transfer-to-client-main`, {
+    method: 'POST',
+    headers: createHeaders(),
+    body: JSON.stringify(backendData),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.message || errorData.error || `Failed to transfer money: ${response.statusText}`;
+    const error = new Error(errorMessage);
+    throw error;
+  }
+
+  const data: any = await response.json();
+
+  const fromAccountConverted: Account = {
+    id: data.data.fromAccount.id,
+    name: data.data.fromAccount.name,
+    iban: data.data.fromAccount.iban,
+    balance: parseFloat(data.data.fromAccount.balance?.toString() || '0'),
+    currency: data.data.fromAccount.currency || 'EUR',
+    type: 'checking',
+    status: 'active',
+    createdAt: new Date().toISOString(),
+  };
+
+  const toAccountConverted: Account = {
+    id: data.data.toAccount.id,
+    name: data.data.toAccount.name,
+    iban: data.data.toAccount.iban,
+    balance: parseFloat(data.data.toAccount.balance?.toString() || '0'),
+    currency: data.data.toAccount.currency || 'EUR',
+    type: 'checking',
+    status: 'active',
+    createdAt: new Date().toISOString(),
+  };
+
+  return {
+    fromAccount: fromAccountConverted,
+    toAccount: toAccountConverted,
+  };
+}
+
 export async function closeAccount(accountId: string, transferToAccountId?: string): Promise<{ accountId: string; status: string; balanceTransferred?: number }> {
   const response = await fetch(`${API_BASE_URL}/accounts/${accountId}/close`, {
     method: 'POST',

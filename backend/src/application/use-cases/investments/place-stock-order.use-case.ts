@@ -7,9 +7,10 @@ import {
   StockOrderStatusEnum,
   StockOrderTypeOrmEntity,
 } from '@infrastructure/database/entities/stock-order.typeorm.entity';
-import { InvestmentWalletTypeOrmEntity } from '@infrastructure/database/entities/investment-wallet.typeorm.entity';
 import { StockHoldingTypeOrmEntity } from '@infrastructure/database/entities/stock-holding.typeorm.entity';
 import { StockTradeTypeOrmEntity } from '@infrastructure/database/entities/stock-trade.typeorm.entity';
+import { AccountTypeOrmEntity } from '@infrastructure/database/entities/account.typeorm.entity';
+import { AccountType } from '@domain/entities/account.entity';
 
 export type PlaceStockOrderInput = {
   stockSymbol: string;
@@ -36,6 +37,25 @@ export class PlaceStockOrderUseCase {
   private readonly maxPriceCentsInt32 = 2_000_000_000;
 
   constructor(private readonly dataSource: DataSource) {}
+
+  private async findPrimaryAccount(
+    accountsRepo: Repository<AccountTypeOrmEntity>,
+    userId: string,
+  ): Promise<AccountTypeOrmEntity> {
+    const checking = await accountsRepo.findOne({
+      where: { userId, isActive: true, type: AccountType.CHECKING },
+      order: { createdAt: 'ASC' },
+    });
+    if (checking) return checking;
+
+    const anyActive = await accountsRepo.findOne({
+      where: { userId, isActive: true },
+      order: { createdAt: 'ASC' },
+    });
+    if (anyActive) return anyActive;
+
+    throw new BadRequestException("Aucun compte bancaire actif n'est disponible pour réaliser cette opération.");
+  }
 
   async execute(userId: string, input: PlaceStockOrderInput): Promise<ClientOrderDto> {
     const symbol = (input.stockSymbol ?? '').trim().toUpperCase();
@@ -72,7 +92,7 @@ export class PlaceStockOrderUseCase {
     return await this.dataSource.transaction(async (manager) => {
       const stocksRepo = manager.getRepository(StockTypeOrmEntity);
       const ordersRepo = manager.getRepository(StockOrderTypeOrmEntity);
-      const walletsRepo = manager.getRepository(InvestmentWalletTypeOrmEntity);
+      const accountsRepo = manager.getRepository(AccountTypeOrmEntity);
       const holdingsRepo = manager.getRepository(StockHoldingTypeOrmEntity);
 
       const stock = await stocksRepo.findOne({ where: { symbol } });
@@ -81,11 +101,7 @@ export class PlaceStockOrderUseCase {
         throw new ForbiddenException("Cette action n'est pas disponible à l'achat");
       }
 
-      let wallet = await walletsRepo.findOne({ where: { userId } });
-      if (!wallet) {
-        wallet = walletsRepo.create({ userId, cashCents: '0' });
-        wallet = await walletsRepo.save(wallet);
-      }
+      const userAccount = await this.findPrimaryAccount(accountsRepo, userId);
 
       const orderId = uuidv4();
       const now = new Date();
@@ -116,25 +132,35 @@ export class PlaceStockOrderUseCase {
         createdAt: now,
       });
 
-      const walletCash = BigInt(wallet.cashCents);
-
       if (side === 'buy') {
         const reserved = BigInt(quantity) * BigInt(limitPriceCents);
         const required = reserved + BigInt(feeCents);
-        if (walletCash < required) {
+        const available = BigInt(Math.round(userAccount.balance * 100));
+        if (available < required) {
           throw new BadRequestException(
-            `Solde insuffisant pour placer cet ordre. Requis: ${formatCents(required)} (frais inclus), disponible: ${formatCents(walletCash)}.`,
+            `Solde insuffisant pour placer cet ordre. Requis: ${formatCents(required)} (frais inclus), disponible: ${formatCents(available)}.`,
           );
         }
 
-        wallet.cashCents = String(walletCash - required);
+        userAccount.balance = Number(available - required) / 100;
         order.reservedCashCents = String(reserved);
         order.feeCharged = true;
-        await walletsRepo.save(wallet);
+        await accountsRepo.save(userAccount);
       } else {
+        const available = BigInt(Math.round(userAccount.balance * 100));
+        if (available < BigInt(feeCents)) {
+          throw new BadRequestException(
+            `Solde insuffisant pour payer les frais de vente (${formatCents(BigInt(feeCents))}). Disponible: ${formatCents(available)}.`,
+          );
+        }
         if (holding.quantity < quantity) {
           throw new BadRequestException("Vous ne possédez pas assez d'actions pour vendre");
         }
+
+        userAccount.balance = Number(available - BigInt(feeCents)) / 100;
+        order.feeCharged = true;
+        await accountsRepo.save(userAccount);
+
         holding.quantity -= quantity;
         order.reservedQuantity = quantity;
         await holdingsRepo.save(holding);
@@ -168,10 +194,19 @@ export class PlaceStockOrderUseCase {
     manager: any,
   ): Promise<StockOrderTypeOrmEntity> {
     const ordersRepo: Repository<StockOrderTypeOrmEntity> = manager.getRepository(StockOrderTypeOrmEntity);
-    const walletsRepo: Repository<InvestmentWalletTypeOrmEntity> = manager.getRepository(InvestmentWalletTypeOrmEntity);
+    const accountsRepo: Repository<AccountTypeOrmEntity> = manager.getRepository(AccountTypeOrmEntity);
     const holdingsRepo: Repository<StockHoldingTypeOrmEntity> = manager.getRepository(StockHoldingTypeOrmEntity);
     const tradesRepo: Repository<StockTradeTypeOrmEntity> = manager.getRepository(StockTradeTypeOrmEntity);
     const stocksRepo: Repository<StockTypeOrmEntity> = manager.getRepository(StockTypeOrmEntity);
+
+    const accountCache = new Map<string, AccountTypeOrmEntity>();
+    const getAccount = async (userId: string) => {
+      const cached = accountCache.get(userId);
+      if (cached) return cached;
+      const account = await this.findPrimaryAccount(accountsRepo, userId);
+      accountCache.set(userId, account);
+      return account;
+    };
 
     while (order.remainingQuantity > 0) {
       const isBuy = order.side === StockOrderSideEnum.BUY;
@@ -219,17 +254,15 @@ export class PlaceStockOrderUseCase {
         await holdingsRepo.save(buyerHolding);
       }
 
-      const buyerWallet = await walletsRepo.findOne({ where: { userId: buyOrder.userId } });
-      if (!buyerWallet) {
-        throw new Error('Wallet acheteur introuvable');
-      }
-
       const reservedRelease = BigInt(qty) * BigInt(buyOrder.limitPriceCents);
       const actualCost = BigInt(qty) * BigInt(tradePriceCents);
       const refund = reservedRelease - actualCost;
-      const buyerCash = BigInt(buyerWallet.cashCents);
-      buyerWallet.cashCents = String(buyerCash + refund);
-      await walletsRepo.save(buyerWallet);
+      if (refund > 0n) {
+        const buyerAccount = await getAccount(buyOrder.userId);
+        const buyerCents = BigInt(Math.round(buyerAccount.balance * 100));
+        buyerAccount.balance = Number(buyerCents + refund) / 100;
+        await accountsRepo.save(buyerAccount);
+      }
 
       buyOrder.remainingQuantity -= qty;
       buyOrder.reservedCashCents = String(BigInt(buyOrder.reservedCashCents) - reservedRelease);
@@ -239,19 +272,21 @@ export class PlaceStockOrderUseCase {
       sellOrder.reservedQuantity -= qty;
       sellOrder.status = sellOrder.remainingQuantity === 0 ? StockOrderStatusEnum.FILLED : StockOrderStatusEnum.PARTIALLY_FILLED;
 
-      const sellerWallet = await walletsRepo.findOne({ where: { userId: sellOrder.userId } });
-      if (!sellerWallet) {
-        throw new Error('Wallet vendeur introuvable');
-      }
-      const sellerCash = BigInt(sellerWallet.cashCents);
       const proceeds = BigInt(qty) * BigInt(tradePriceCents);
-      let newSellerCash = sellerCash + proceeds;
+      let credited = proceeds;
       if (!sellOrder.feeCharged) {
-        newSellerCash = newSellerCash - BigInt(this.feeCents);
+        // Backward-compat: older orders may not have been charged upfront.
+        credited = proceeds - BigInt(this.feeCents);
+        if (credited < 0n) credited = 0n;
         sellOrder.feeCharged = true;
       }
-      sellerWallet.cashCents = String(newSellerCash);
-      await walletsRepo.save(sellerWallet);
+
+      if (credited > 0n) {
+        const sellerAccount = await getAccount(sellOrder.userId);
+        const sellerCents = BigInt(Math.round(sellerAccount.balance * 100));
+        sellerAccount.balance = Number(sellerCents + credited) / 100;
+        await accountsRepo.save(sellerAccount);
+      }
 
       await ordersRepo.save([buyOrder, sellOrder]);
 

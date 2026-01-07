@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +14,7 @@ import Modal from '@/components/molecules/Modal';
 import AccountSummaryCard from '@/components/molecules/AccountSummaryCard';
 import { useI18n } from '@/contexts/I18nContext';
 import { formatCurrency } from '@/lib/format';
-import { getAccounts, createAccount, depositMoney, transferMoney, renameAccount, closeAccount } from '@/lib/api/accounts';
+import { getAccounts, createAccount, depositMoney, transferMoney, transferToClientMain, renameAccount, closeAccount } from '@/lib/api/accounts';
 import type { Language, TranslationKey } from '@/lib/i18n';
 import type { Account } from '@/lib/types';
 
@@ -31,12 +31,25 @@ const renameAccountSchema = z.object({
 const transferSchema = z
   .object({
     fromAccountId: z.string().min(1, 'form.error.required'),
-    toAccountId: z.string().min(1, 'form.error.required'),
+    toAccountId: z.string().optional(),
+    recipientEmail: z.string().email('accounts.transfer.error.email').optional().or(z.literal('')),
     amount: z.coerce.number().gt(0, 'form.error.required'),
     reference: z.string().min(1, 'form.error.required'),
   })
-  .refine((data) => data.fromAccountId !== data.toAccountId, {
-  message: 'accounts.transfer.error.sameAccount',
+  .refine((data) => {
+    const hasExternal = Boolean((data.recipientEmail ?? '').trim());
+    const hasInternal = Boolean((data.toAccountId ?? '').trim());
+    return hasExternal || hasInternal;
+  }, {
+    message: 'accounts.transfer.error.destinationRequired',
+    path: ['toAccountId'],
+  })
+  .refine((data) => {
+    const hasExternal = Boolean((data.recipientEmail ?? '').trim());
+    if (hasExternal) return true;
+    return Boolean(data.toAccountId) && data.fromAccountId !== data.toAccountId;
+  }, {
+    message: 'accounts.transfer.error.sameAccount',
     path: ['toAccountId'],
   });
 
@@ -48,6 +61,14 @@ type CreateAccountFormValues = z.infer<typeof createAccountSchema>;
 type RenameAccountFormValues = z.infer<typeof renameAccountSchema>;
 type TransferFormValues = z.infer<typeof transferSchema>;
 type DepositFormValues = z.infer<typeof depositSchema>;
+
+type MessagingUser = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role?: string;
+};
 
 function getAccountStatusTone(account: Account): 'success' | 'warning' | 'neutral' {
   if (account.status === 'closed') {
@@ -64,6 +85,7 @@ export default function AccountManagementPanel() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [dragSourceAccountId, setDragSourceAccountId] = useState<string | null>(null);
   const [dragOverAccountId, setDragOverAccountId] = useState<string | null>(null);
@@ -73,6 +95,29 @@ export default function AccountManagementPanel() {
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [accountToClose, setAccountToClose] = useState<Account | null>(null);
   const [selectedTransferTarget, setSelectedTransferTarget] = useState<string | null>(null);
+  const [recipientSuggestions, setRecipientSuggestions] = useState<MessagingUser[]>([]);
+  const [isSearchingRecipient, setIsSearchingRecipient] = useState(false);
+  const [lastCreatedAccountId, setLastCreatedAccountId] = useState<string | null>(null);
+
+  const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const accountsListRef = useRef<HTMLDivElement | null>(null);
+
+  const showFeedback = (key: TranslationKey) => {
+    setFeedback(t(key));
+    if (feedbackTimeoutRef.current) {
+      clearTimeout(feedbackTimeoutRef.current);
+    }
+    feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 3500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+        feedbackTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const createAccountForm = useForm<CreateAccountFormValues>({
     resolver: zodResolver(createAccountSchema),
@@ -86,8 +131,10 @@ export default function AccountManagementPanel() {
 
   const transferForm = useForm<TransferFormValues>({
     resolver: zodResolver(transferSchema),
-    defaultValues: { fromAccountId: '', toAccountId: '', amount: 0, reference: '' },
+    defaultValues: { fromAccountId: '', toAccountId: '', recipientEmail: '', amount: 0, reference: '' },
   });
+
+  const watchedRecipientEmail = transferForm.watch('recipientEmail');
 
   const depositForm = useForm<DepositFormValues>({
     resolver: zodResolver(depositSchema),
@@ -121,24 +168,90 @@ export default function AccountManagementPanel() {
       transferForm.reset({
         fromAccountId: '',
         toAccountId: '',
+        recipientEmail: '',
         amount: 0,
         reference: ''
       });
     }
   }, [accounts, transferForm]);
 
+  // Suggest recipient emails using the messaging user search (debounced)
+  useEffect(() => {
+    const query = (watchedRecipientEmail ?? '').trim();
+    if (query.length < 3) {
+      setRecipientSuggestions([]);
+      setIsSearchingRecipient(false);
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setRecipientSuggestions([]);
+      setIsSearchingRecipient(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsSearchingRecipient(true);
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const url = new URL('/api/messages/users/search', window.location.origin);
+        url.searchParams.set('email', query);
+        url.searchParams.set('role', 'client');
+
+        const response = await fetch(url.toString(), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          setRecipientSuggestions([]);
+          return;
+        }
+
+        const data = await response.json().catch(() => null);
+        const normalized = Array.isArray(data) ? (data as MessagingUser[]) : [];
+        setRecipientSuggestions(normalized.slice(0, 6));
+      } catch {
+        setRecipientSuggestions([]);
+      } finally {
+        setIsSearchingRecipient(false);
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [watchedRecipientEmail]);
+
   const handleCreateAccount = createAccountForm.handleSubmit(async (values: CreateAccountFormValues) => {
     try {
       setError(null);
-      await createAccount({
+      const created = await createAccount({
         name: values.name,
         type: values.type,
         initialDeposit: values.initialDeposit,
       });
+      setLastCreatedAccountId(created.id);
+      showFeedback('feedback.accountCreated');
       
       // Refresh all accounts to show the new account with correct status
       const updatedAccounts = await getAccounts();
       setAccounts(updatedAccounts);
+
+      // Smoothly scroll to the newly created account card (or at least the list).
+      window.setTimeout(() => {
+        const target = document.getElementById(`account-${created.id}`);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+        accountsListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 0);
       
       createAccountForm.reset();
     } catch (err) {
@@ -169,22 +282,37 @@ export default function AccountManagementPanel() {
   const handleTransfer = transferForm.handleSubmit(async (values: TransferFormValues) => {
     try {
       setError(null);
-      const result = await transferMoney({
-        fromAccountId: values.fromAccountId,
-        toAccountId: values.toAccountId,
-        amount: values.amount,
-        description: values.reference,
-      });
-      
-      // Update accounts with new balances
-      setAccounts(prev => prev.map(account => {
-        if (account.id === result.fromAccount.id) return result.fromAccount;
-        if (account.id === result.toAccount.id) return result.toAccount;
-        return account;
-      }));
+
+      const recipientEmail = (values.recipientEmail ?? '').trim();
+      if (recipientEmail) {
+        const result = await transferToClientMain({
+          fromAccountId: values.fromAccountId,
+          recipientEmail,
+          amount: values.amount,
+          description: values.reference,
+        });
+
+        // Destination account belongs to another client -> only source balance is in our list
+        setAccounts((prev) => prev.map((account) => (account.id === result.fromAccount.id ? result.fromAccount : account)));
+      } else {
+        const result = await transferMoney({
+          fromAccountId: values.fromAccountId,
+          toAccountId: values.toAccountId ?? '',
+          amount: values.amount,
+          description: values.reference,
+        });
+
+        // Update accounts with new balances
+        setAccounts(prev => prev.map(account => {
+          if (account.id === result.fromAccount.id) return result.fromAccount;
+          if (account.id === result.toAccount.id) return result.toAccount;
+          return account;
+        }));
+      }
       
       transferForm.reset();
       setIsTransferModalOpen(false);
+      showFeedback('feedback.transferCompleted');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to transfer money';
       
@@ -233,6 +361,7 @@ export default function AccountManagementPanel() {
     }
     transferForm.setValue('fromAccountId', sourceId);
     transferForm.setValue('toAccountId', targetAccountId);
+    transferForm.setValue('recipientEmail', '');
     transferForm.setValue('amount', 0);
     transferForm.setValue('reference', '');
     setIsTransferModalOpen(true);
@@ -318,6 +447,20 @@ export default function AccountManagementPanel() {
 
   return (
     <div className="flex flex-col gap-12">
+      {feedback && (
+        <Card className="border-white/10 bg-white/5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-white/60">{language === 'fr' ? 'Succès' : 'Success'}</p>
+              <p className="mt-1 text-sm text-white/80">{feedback}</p>
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setFeedback(null)}>
+              {t('actions.cancel')}
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {error && (
         <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
           <div className="flex items-center gap-3">
@@ -461,6 +604,59 @@ export default function AccountManagementPanel() {
                       'form.error.required',
                   )}
                 </p>
+              ) : null}
+            </FormField>
+
+            <FormField label={t('accounts.transfer.recipientEmail')} htmlFor="transfer-modal-recipient-email">
+              <Input
+                id="transfer-modal-recipient-email"
+                type="email"
+                placeholder={language === 'fr' ? 'email@exemple.com' : 'email@example.com'}
+                {...transferForm.register('recipientEmail')}
+                hasError={Boolean(transferForm.formState.errors.recipientEmail)}
+              />
+              {transferForm.formState.errors.recipientEmail ? (
+                <p className="text-xs text-[#ff4f70]">
+                  {t(
+                    (transferForm.formState.errors.recipientEmail.message as TranslationKey | undefined) ??
+                      'form.error.required',
+                  )}
+                </p>
+              ) : null}
+              <p className="text-xs text-white/60">
+                {language === 'fr'
+                  ? "Optionnel : si renseigné, le virement ira vers le compte principal du client."
+                  : 'Optional: if set, transfer goes to the client\'s main account.'}
+              </p>
+
+              {isSearchingRecipient ? (
+                <p className="text-xs text-white/60">{language === 'fr' ? 'Recherche…' : 'Searching…'}</p>
+              ) : null}
+
+              {recipientSuggestions.length > 0 ? (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2">
+                  <p className="mb-2 text-xs text-white/60">
+                    {language === 'fr' ? 'Suggestions (depuis Messages)' : 'Suggestions (from Messages)'}
+                  </p>
+                  <div className="space-y-1">
+                    {recipientSuggestions.map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => {
+                          transferForm.setValue('recipientEmail', u.email, { shouldValidate: true, shouldDirty: true });
+                          transferForm.setValue('toAccountId', '', { shouldValidate: true, shouldDirty: true });
+                        }}
+                        className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-left text-sm text-white/80 hover:bg-white/5"
+                      >
+                        <span className="truncate">
+                          {u.firstName} {u.lastName}
+                        </span>
+                        <span className="ml-3 truncate text-xs text-white/60">{u.email}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ) : null}
             </FormField>
 
@@ -614,9 +810,16 @@ export default function AccountManagementPanel() {
                 </FormField>
               </div>
               <div className="md:col-span-2">
-                <Button type="submit" className="w-full">
+                <Button type="submit" className="w-full" disabled={createAccountForm.formState.isSubmitting}>
                   {t('accounts.submit')}
                 </Button>
+                {lastCreatedAccountId ? (
+                  <p className="mt-3 text-xs text-white/60">
+                    {language === 'fr'
+                      ? 'Le compte a été créé. La liste a été mise à jour.'
+                      : 'Account created. The list has been refreshed.'}
+                  </p>
+                ) : null}
               </div>
             </form>
           </Card>
@@ -655,20 +858,31 @@ export default function AccountManagementPanel() {
                 ) : null}
               </FormField>
               <FormField label={t('accounts.transfer.to')} htmlFor="transfer-to">
-                <Select
-                  id="transfer-to"
-                  {...transferForm.register('toAccountId')}
-                  hasError={Boolean(transferForm.formState.errors.toAccountId)}
-                >
-                  <option value="" disabled>
-                    --
-                  </option>
-                  {activeAccounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </Select>
+                {(() => {
+                  const register = transferForm.register('toAccountId');
+                  return (
+                    <Select
+                      id="transfer-to"
+                      {...register}
+                      onChange={(e) => {
+                        register.onChange(e);
+                        if (e.target.value) {
+                          transferForm.setValue('recipientEmail', '', { shouldValidate: true, shouldDirty: true });
+                        }
+                      }}
+                      hasError={Boolean(transferForm.formState.errors.toAccountId)}
+                    >
+                      <option value="" disabled>
+                        --
+                      </option>
+                      {activeAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name}
+                        </option>
+                      ))}
+                    </Select>
+                  );
+                })()}
                 {transferForm.formState.errors.toAccountId ? (
                   <p className="text-xs text-[#ff4f70]">
                     {t(
@@ -678,6 +892,71 @@ export default function AccountManagementPanel() {
                   </p>
                 ) : null}
               </FormField>
+
+              <FormField label={t('accounts.transfer.recipientEmail')} htmlFor="transfer-recipient-email">
+                {(() => {
+                  const register = transferForm.register('recipientEmail');
+                  return (
+                    <Input
+                      id="transfer-recipient-email"
+                      type="email"
+                      placeholder={language === 'fr' ? 'email@exemple.com' : 'email@example.com'}
+                      {...register}
+                      onChange={(e) => {
+                        register.onChange(e);
+                        if (e.target.value) {
+                          transferForm.setValue('toAccountId', '', { shouldValidate: true, shouldDirty: true });
+                        }
+                      }}
+                      hasError={Boolean(transferForm.formState.errors.recipientEmail)}
+                    />
+                  );
+                })()}
+                {transferForm.formState.errors.recipientEmail ? (
+                  <p className="text-xs text-[#ff4f70]">
+                    {t(
+                      (transferForm.formState.errors.recipientEmail.message as TranslationKey | undefined) ??
+                        'form.error.required',
+                    )}
+                  </p>
+                ) : null}
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {language === 'fr'
+                    ? "Optionnel : si renseigné, le virement ira vers le compte principal du client (autre client)."
+                    : "Optional: if set, transfer goes to the client's main account (another client)."}
+                </p>
+
+                {isSearchingRecipient ? (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{language === 'fr' ? 'Recherche…' : 'Searching…'}</p>
+                ) : null}
+
+                {recipientSuggestions.length > 0 ? (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-2">
+                    <p className="mb-2 text-xs text-white/60">
+                      {language === 'fr' ? 'Suggestions (depuis Messages)' : 'Suggestions (from Messages)'}
+                    </p>
+                    <div className="space-y-1">
+                      {recipientSuggestions.map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => {
+                            transferForm.setValue('recipientEmail', u.email, { shouldValidate: true, shouldDirty: true });
+                            transferForm.setValue('toAccountId', '', { shouldValidate: true, shouldDirty: true });
+                          }}
+                          className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-left text-sm text-white/80 hover:bg-white/5"
+                        >
+                          <span className="truncate">
+                            {u.firstName} {u.lastName}
+                          </span>
+                          <span className="ml-3 truncate text-xs text-white/60">{u.email}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </FormField>
+
               <FormField label={t('accounts.transfer.amount')} htmlFor="transfer-amount">
                 <Input
                   id="transfer-amount"
@@ -719,12 +998,13 @@ export default function AccountManagementPanel() {
         </div>
       </section>
 
-      <section>
+      <section ref={accountsListRef}>
         <SectionTitle title={t('accounts.listTitle')} />
         <div className="grid gap-6 lg:grid-cols-2">
           {availableAccounts.map((account) => (
             <div
               key={account.id}
+              id={`account-${account.id}`}
               className={`space-y-4 rounded-2xl transition outline-offset-4 ${
                 dragOverAccountId === account.id ? 'outline outline-2 outline-emerald-400/70' : ''
               }`}
