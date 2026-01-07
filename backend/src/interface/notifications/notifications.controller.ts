@@ -35,13 +35,13 @@ export class NotificationsController {
   @Get('notifications')
   @UseGuards(JwtAuthGuard)
   async getNotifications(@Req() req: AuthenticatedRequest) {
-    return this.notificationsService.getNotificationsForUser(req.user.sub);
+    return this.notificationsService.getNotificationsForUser(req.user.id);
   }
 
   @Post('notifications/:id/read')
   @UseGuards(JwtAuthGuard)
   async markAsRead(@Param('id') id: string, @Req() req: any) {
-    const result = await this.notificationsService.markNotificationAsRead(id, req.user.sub);
+    const result = await this.notificationsService.markNotificationAsRead(id, req.user.id);
     if (!result) {
       throw new ForbiddenException();
     }
@@ -64,7 +64,7 @@ export class NotificationsController {
       throw new ForbiddenException();
     }
     const result = await this.notificationsService.createActivity(
-      req.user.sub,
+      req.user.id,
       body.title,
       body.description,
     );
@@ -84,7 +84,7 @@ export class NotificationsController {
       throw new ForbiddenException();
     }
     const result = await this.notificationsService.sendNotificationToClient(
-      req.user.sub,
+      req.user.id,
       body.clientId,
       body.message,
     );

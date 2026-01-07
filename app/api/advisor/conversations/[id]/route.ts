@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.INTERNAL_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL =
+  process.env.INTERNAL_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +16,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const response = await fetch(`${BACKEND_URL}/advisor/conversations/${id}`, {
+    const response = await fetch(`${BACKEND_URL}/messages/conversations/${id}`, {
       headers: {
         Authorization: authHeader,
       },

@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL =
+  process.env.INTERNAL_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
+
+async function toNextResponse(response: Response) {
+  const text = await response.text();
+
+  if (!text) {
+    return new NextResponse(null, { status: response.status });
+  }
+
+  try {
+    return NextResponse.json(JSON.parse(text), { status: response.status });
+  } catch {
+    return new NextResponse(text, {
+      status: response.status,
+      headers: {
+        'Content-Type': response.headers.get('content-type') || 'text/plain; charset=utf-8',
+      },
+    });
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -14,14 +34,13 @@ export async function GET(
   }
 
   try {
-    const response = await fetch(`${BACKEND_URL}/advisor/conversations/${id}/messages`, {
+    const response = await fetch(`${BACKEND_URL}/messages/conversations/${id}/messages`, {
       headers: {
         Authorization: authHeader,
       },
     });
 
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    return await toNextResponse(response);
   } catch (error) {
     console.error('Error proxying request:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -41,7 +60,7 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const response = await fetch(`${BACKEND_URL}/advisor/conversations/${id}/messages`, {
+    const response = await fetch(`${BACKEND_URL}/messages/conversations/${id}/messages`, {
       method: 'POST',
       headers: {
         Authorization: authHeader,
@@ -50,8 +69,7 @@ export async function POST(
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    return await toNextResponse(response);
   } catch (error) {
     console.error('Error proxying request:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
