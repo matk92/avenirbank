@@ -3,8 +3,8 @@ import { hash } from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
 import { User, UserRole } from '@domain/entities/user.entity';
-import { IUserRepository } from '@domain/repositories/user.repository.interface';
-import { IEmailService } from '../../interfaces/email-service.interface';
+import { UserPostgresRepository } from '@infrastructure/database/repositories/user.postgres.repository';
+import { EmailService } from '@infrastructure/services/email.service';
 
 /**
  * Register Use Case - Application Layer
@@ -30,8 +30,8 @@ export interface RegisterOutput {
 @Injectable()
 export class RegisterUseCase {
   constructor(
-    private readonly userRepository: IUserRepository,
-    private readonly emailService: IEmailService
+    private readonly userRepository: UserPostgresRepository,
+    private readonly emailService: EmailService,
   ) {}
 
   async execute(input: RegisterInput): Promise<RegisterOutput> {

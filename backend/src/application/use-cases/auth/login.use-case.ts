@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { compare } from 'bcrypt';
-import { IUserRepository } from '@domain/repositories/user.repository.interface';
+import { UserPostgresRepository } from '@infrastructure/database/repositories/user.postgres.repository';
 import { User } from '@domain/entities/user.entity';
 
 /**
@@ -19,7 +19,7 @@ export interface LoginOutput {
 
 @Injectable()
 export class LoginUseCase {
-  constructor(private readonly userRepository: IUserRepository) {}
+  constructor(private readonly userRepository: UserPostgresRepository) {}
 
   async execute(input: LoginInput): Promise<LoginOutput> {
     this.validateInput(input);

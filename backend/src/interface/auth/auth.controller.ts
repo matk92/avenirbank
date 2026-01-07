@@ -1,4 +1,5 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, Get, Param } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterUseCase } from '@application/use-cases/auth/register.use-case';
@@ -27,6 +28,7 @@ export class AuthController {
   constructor(
     private readonly registerUseCase: RegisterUseCase,
     private readonly loginUseCase: LoginUseCase,
+    private readonly jwtService: JwtService,
     private readonly confirmEmailUseCase: ConfirmEmailUseCase,
   ) {}
 
@@ -41,7 +43,7 @@ export class AuthController {
     });
 
     return {
-      message: 'User registered successfully. Please check your email to verify your account.',
+      message: 'User registered successfully. Please check your email for a verification link.',
       user: {
         id: result.id,
         email: result.email,
@@ -59,8 +61,14 @@ export class AuthController {
       password: loginDto.password,
     });
 
+    const token = await this.jwtService.signAsync({
+      sub: result.user.id,
+      role: result.user.role,
+      email: result.user.email,
+    });
+
     return {
-      access_token: 'jwt-token-' + result.user.id,
+      access_token: token,
       user: {
         id: result.user.id,
         email: result.user.email,
@@ -68,13 +76,6 @@ export class AuthController {
         lastName: result.user.lastName,
       },
     };
-  }
-  
-  @Post('verify-email')
-  @HttpCode(HttpStatus.OK)
-  async verifyEmail(@Body() body: { token: string }): Promise<{ message: string }> {
-    await this.confirmEmailUseCase.execute(body.token);
-    return { message: 'Email verified successfully' };
   }
   
   @Get('verify-email/:token')
