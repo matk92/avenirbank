@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule } from '@nestjs/config';
 import { AuthController } from './auth.controller';
+import { AuthDiagnosticController } from './auth-diagnostic.controller';
 import { RegisterUseCase } from '@application/use-cases/auth/register.use-case';
 import { LoginUseCase } from '@application/use-cases/auth/login.use-case';
 import { ConfirmEmailUseCase } from '@application/use-cases/email-verification/confirm-email.use-case';
@@ -24,7 +25,7 @@ import { IEmailService } from '@application/use-cases/auth/register.use-case';
     }),
     ConfigModule,
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, AuthDiagnosticController],
   providers: [
     UserPostgresRepository,
     EmailService,

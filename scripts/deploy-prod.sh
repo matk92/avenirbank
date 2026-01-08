@@ -39,8 +39,8 @@ if [ -f .dockerbuildconfig ]; then
     source .dockerbuildconfig
 fi
 
-# Build with CPU and memory limits to reduce system load
-DOCKER_BUILDKIT=1 docker compose --env-file .env.prod -f docker-compose.prod.yml build --parallel --progress=plain --memory 2g
+# Build with CPU limits to reduce system load
+DOCKER_BUILDKIT=1 docker compose --env-file .env.prod -f docker-compose.prod.yml build --parallel --progress=plain
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 
 echo "Waiting for services to be ready..."
