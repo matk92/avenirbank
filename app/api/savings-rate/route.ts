@@ -4,7 +4,7 @@ const BACKEND_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_
 
 export async function GET() {
   try {
-    const response = await fetch(`${BACKEND_URL}/director/savings-rate`, {
+    const response = await fetch(`${BACKEND_URL}/savings-rate`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

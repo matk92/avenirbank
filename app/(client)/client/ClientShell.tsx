@@ -9,9 +9,10 @@ import DarkVeil from '@/components/DarkVeil';
 import Badge from '@/components/atoms/Badge';
 import { useI18n } from '@/contexts/I18nContext';
 import { useMessaging } from '@/contexts/MessagingContext';
+import { useClientData } from '@/contexts/ClientDataContext';
 import type { TranslationKey } from '@/lib/i18n';
 import { logout } from '@/lib/logout';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 const navItems: { href: string; labelKey: TranslationKey; icon: LucideIcon }[] = [
@@ -74,6 +75,29 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 	const router = useRouter();
 	const { t, language } = useI18n();
 	const { unreadTotal } = useMessaging();
+	const { state } = useClientData();
+
+	const normalizeText = (value: string) =>
+		value
+			.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.replace(/\u2019/g, "'")
+			.toLowerCase();
+
+	const isSavingsRateNotification = (message: string) => {
+		const normalized = normalizeText(message);
+		return normalized.includes('taux') && normalized.includes('epargne');
+	};
+
+	const unreadSavingsRateNotifications = useMemo(
+		() =>
+			state.notifications.filter(
+				(notification) =>
+					!notification.read &&
+					isSavingsRateNotification(notification.message),
+			).length,
+		[state.notifications],
+	);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return;
@@ -147,6 +171,7 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 						const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 						const Icon = item.icon;
 						const isMessages = item.href === '/client/messages';
+						const isSavings = item.href === '/client/savings';
 						return (
 							<Link
 								key={item.href}
@@ -167,6 +192,16 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 										}`}
 									>
 										{unreadTotal}
+									</Badge>
+								)}
+								{isSavings && unreadSavingsRateNotifications > 0 && (
+									<Badge
+										tone="neutral"
+										className={`shrink-0 px-2 py-0.5 ${
+											active ? 'border-black/10 bg-black/10 text-black/80' : ''
+										}`}
+									>
+										{unreadSavingsRateNotifications}
 									</Badge>
 								)}
 							</Link>

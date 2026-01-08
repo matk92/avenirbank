@@ -33,9 +33,17 @@ export class SetSavingsRateUseCase {
       throw new NotFoundException('Director not found');
     }
 
+    const previous = await this.savingsRateRepository.findOne({
+      where: {},
+      order: { effectiveDate: 'DESC' },
+    });
+    const previousRate = previous?.rate != null ? Number(previous.rate) : null;
+
+    const newRate = Number(command.rate);
+
     const domainEntity = new SavingsRate(
       uuidv4(),
-      command.rate,
+      newRate,
       command.effectiveDate,
       command.setBy,
     );
@@ -48,19 +56,33 @@ export class SetSavingsRateUseCase {
 
     await this.savingsRateRepository.save(entity);
 
-    await this.notifyClientsWithSavingsAccounts(command.rate);
+    await this.notifyClientsWithSavingsAccounts(newRate, previousRate);
 
     return domainEntity;
   }
 
-  private async notifyClientsWithSavingsAccounts(newRate: number): Promise<void> {
+  private async notifyClientsWithSavingsAccounts(newRate: number, previousRate: number | null): Promise<void> {
     const savingsAccounts = await this.accountRepository.find({
       where: { type: AccountType.SAVINGS, isActive: true },
     });
 
-    const uniqueUserIds = Array.from(new Set(savingsAccounts.map(acc => acc.userId)));
+    const uniqueUserIds = savingsAccounts.length
+      ? Array.from(new Set(savingsAccounts.map((acc) => acc.userId)))
+      : (await this.userRepository.find({ where: { role: UserRoleEnum.CLIENT } })).map((u) => u.id);
 
-    const message = `Le taux d'épargne a été modifié. Nouveau taux : ${newRate.toFixed(2)}% par an.`;
+    const direction =
+      previousRate === null
+        ? 'a été défini'
+        : newRate > previousRate
+          ? 'a augmenté'
+          : newRate < previousRate
+            ? 'a diminué'
+            : 'a été confirmé';
+
+    const message =
+      previousRate === null
+        ? `Le taux d'épargne ${direction}. Nouveau taux : ${newRate.toFixed(2)}% par an.`
+        : `Le taux d'épargne ${direction} (${previousRate.toFixed(2)}% → ${newRate.toFixed(2)}% par an).`;
 
     for (const userId of uniqueUserIds) {
       await this.notificationsService.createNotification(userId, message);

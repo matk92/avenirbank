@@ -1,13 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
 const BACKEND_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export async function GET() {
   const cookieStore = await cookies();
-  const token = cookieStore.get('token')?.value;
+  const cookieToken = cookieStore.get('token')?.value;
+  const authHeader = cookieToken ? `Bearer ${cookieToken}` : null;
 
-  if (!token) {
+  if (!authHeader) {
     return NextResponse.json({ message: 'Non authentifié' }, { status: 401 });
   }
 
@@ -15,7 +16,7 @@ export async function GET() {
     const response = await fetch(`${BACKEND_URL}/director/savings-rate`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': authHeader,
         'Content-Type': 'application/json',
       },
       cache: 'no-store',
@@ -32,11 +33,13 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const requestAuthHeader = request.headers.get('authorization');
   const cookieStore = await cookies();
-  const token = cookieStore.get('token')?.value;
+  const cookieToken = cookieStore.get('token')?.value;
+  const authHeader = requestAuthHeader || (cookieToken ? `Bearer ${cookieToken}` : null);
 
-  if (!token) {
+  if (!authHeader) {
     return NextResponse.json({ message: 'Non authentifié' }, { status: 401 });
   }
 
@@ -46,7 +49,7 @@ export async function POST(request: Request) {
     const response = await fetch(`${BACKEND_URL}/director/savings-rate`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': authHeader,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),

@@ -8,11 +8,13 @@ import Card from '@/components/atoms/Card';
 import Input from '@/components/atoms/Input';
 import SectionTitle from '@/components/atoms/SectionTitle';
 import FormField from '@/components/molecules/FormField';
+import NotificationItem from '@/components/molecules/NotificationItem';
 import { useClientData } from '@/contexts/ClientDataContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { projectSavingsBalance } from '@/lib/finance';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDateTime } from '@/lib/format';
 import type { TranslationKey } from '@/lib/i18n';
+import { useEffect, useRef } from 'react';
 
 const amountSchema = z.object({
   amount: z.coerce.number().gt(0, 'form.error.required'),
@@ -21,8 +23,37 @@ const amountSchema = z.object({
 type AmountFormValues = z.infer<typeof amountSchema>;
 
 export default function SavingsPanel() {
-  const { state, openSavings, depositSavings, withdrawSavings } = useClientData();
+  const { state, openSavings, depositSavings, withdrawSavings, markNotificationRead } = useClientData();
   const { t, language } = useI18n();
+
+  const markedRef = useRef<Set<string>>(new Set());
+
+  const normalizeText = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\u2019/g, "'")
+      .toLowerCase();
+
+  const isSavingsRateNotification = (message: string) => {
+    const normalized = normalizeText(message);
+    return normalized.includes('taux') && normalized.includes('epargne');
+  };
+
+  const savingsRateNotifications = state.notifications
+    .filter((notification) => isSavingsRateNotification(notification.message))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+
+  // Le badge "Épargne" doit rester tant que l'utilisateur n'a pas visité cette page.
+  // Dès que la page Épargne est visitée, on marque les notifs de taux comme lues.
+  useEffect(() => {
+    for (const notification of savingsRateNotifications) {
+      if (notification.read) continue;
+      if (markedRef.current.has(notification.id)) continue;
+      markedRef.current.add(notification.id);
+      markNotificationRead(notification.id);
+    }
+  }, [savingsRateNotifications, markNotificationRead]);
 
   const openForm = useForm<AmountFormValues>({
     resolver: zodResolver(amountSchema),
@@ -48,6 +79,21 @@ export default function SavingsPanel() {
   return (
     <div className="flex flex-col gap-10">
       <SectionTitle title={t('savings.title')} subtitle={t('savings.subtitle')} />
+
+      {savingsRateNotifications.length > 0 ? (
+        <div className="grid gap-4">
+          {savingsRateNotifications.map((notification) => (
+            <NotificationItem
+              key={notification.id}
+              message={notification.message}
+              createdAt={formatDateTime(notification.createdAt, language)}
+              read={notification.read}
+              onMarkAsRead={notification.read ? undefined : () => markNotificationRead(notification.id)}
+            />
+          ))}
+        </div>
+      ) : null}
+
       {!savingsAccount ? (
         <Card className="max-w-xl">
           <p className="mb-4 text-sm text-zinc-600">{t('savings.noAccount')}</p>

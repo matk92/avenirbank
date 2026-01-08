@@ -596,6 +596,7 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
     let notificationSource: EventSource | null = null;
     let pollInterval: ReturnType<typeof setInterval> | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    let savingsRateRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
     const currentTokenRef = { current: null as string | null };
 
     const cleanupConnection = () => {
@@ -603,8 +604,36 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
         clearTimeout(reconnectTimeout);
         reconnectTimeout = null;
       }
+      if (savingsRateRefreshTimeout) {
+        clearTimeout(savingsRateRefreshTimeout);
+        savingsRateRefreshTimeout = null;
+      }
       notificationSource?.close();
       notificationSource = null;
+    };
+
+    const refreshSavingsRate = async () => {
+      try {
+        const response = await fetch('/api/savings-rate', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        const rate = data.rate || 2.5;
+        dispatch({ type: 'UPDATE_SAVINGS_RATE', payload: rate });
+      } catch {
+        // silent
+      }
+    };
+
+    const normalizeText = (value: string) =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\u2019/g, "'")
+        .toLowerCase();
+
+    const isSavingsRateNotification = (message: string) => {
+      const normalized = normalizeText(message);
+      return normalized.includes('taux') && normalized.includes('epargne');
     };
 
     const fetchNotifications = async (token: string) => {
@@ -642,17 +671,25 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
           if (parsed?.type !== 'notification') return;
           const notif = parsed.data;
           if (!notif?.id) return;
+
+          const message = String(notif.message ?? '');
           dispatch({
             type: 'PREPEND_NOTIFICATION',
             payload: {
               notification: {
                 id: String(notif.id),
-                message: String(notif.message ?? ''),
+                message,
                 createdAt: String(notif.createdAt ?? new Date().toISOString()),
                 read: Boolean(notif.read),
               },
             },
           });
+          if (isSavingsRateNotification(message)) {
+            if (savingsRateRefreshTimeout) clearTimeout(savingsRateRefreshTimeout);
+            savingsRateRefreshTimeout = setTimeout(() => {
+              refreshSavingsRate();
+            }, 250);
+          }
         } catch (e) {
           console.error('SSE parse error:', e);
         }
@@ -686,6 +723,7 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
       cleanupConnection();
       fetchNotifications(token);
       connectNotificationsSSE(token);
+      refreshSavingsRate();
     };
 
     ensureConnected();
@@ -695,22 +733,6 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
       if (pollInterval) clearInterval(pollInterval);
       cleanupConnection();
     };
-  }, []);
-
-  useEffect(() => {
-    const fetchSavingsRate = async () => {
-      try {
-        const response = await fetch('/api/savings-rate');
-        if (response.ok) {
-          const data = await response.json();
-          const rate = data.rate || 2.5;
-          dispatch({ type: 'UPDATE_SAVINGS_RATE', payload: rate });
-        }
-      } catch (error) {
-        console.error('Error fetching savings rate:', error);
-      }
-    };
-    fetchSavingsRate();
   }, []);
 
   const createAccount = useCallback((payload: CreateAccountPayload) => {
@@ -782,6 +804,16 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
 
   const markNotificationRead = useCallback((id: string) => {
     dispatch({ type: 'MARK_NOTIFICATION_READ', payload: { id } });
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    fetch(`${BACKEND_URL}/notifications/${id}/read`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => {
+    });
   }, []);
 
   const appendMessage = useCallback((payload: AppendMessagePayload) => {
