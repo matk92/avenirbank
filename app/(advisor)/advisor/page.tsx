@@ -1,10 +1,9 @@
-import React from 'react';
 import Card from '@/components/atoms/Card';
 import Stat from '@/components/atoms/Stat';
 import SectionTitle from '@/components/atoms/SectionTitle';
 import Button from '@/components/atoms/Button';
 import Link from 'next/link';
-import { Users, MessageSquare, Bell, Newspaper, Plus } from 'lucide-react';
+import { Users, MessageSquare, Bell, Newspaper } from 'lucide-react';
 
 export default function AdvisorDashboard() {
 	return (

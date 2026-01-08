@@ -25,7 +25,7 @@ export default function GroupChatPanel() {
 			setMessages((prev) => [...prev, message]);
 		});
 
-		socket.on('user-typing', ({ userId, userName }: { userId: string; userName: string }) => {
+		socket.on('user-typing', ({ userId: _userId, userName }: { userId: string; userName: string }) => {
 			setIsTyping(userName);
 			setTimeout(() => setIsTyping(null), 3000);
 		});

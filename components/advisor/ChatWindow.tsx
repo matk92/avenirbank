@@ -18,7 +18,7 @@ interface ChatWindowProps {
 
 export default function ChatWindow({
   conversationId,
-  clientId,
+  clientId: _clientId,
   clientName,
   currentAdvisorId,
   onTransfer,

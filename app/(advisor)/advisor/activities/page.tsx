@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import { useEffect, useState } from 'react';
 import Card from '@/components/atoms/Card';
 import SectionTitle from '@/components/atoms/SectionTitle';
 import Button from '@/components/atoms/Button';
@@ -11,10 +11,10 @@ import { formatDateTime } from '@/lib/format';
 import type { Activity } from '@/lib/types-advisor';
 
 export default function ActivitiesListPage() {
-	const [activities, setActivities] = React.useState<Activity[]>([]);
-	const [isLoading, setIsLoading] = React.useState(true);
+	const [activities, setActivities] = useState<Activity[]>([]);
+	const [isLoading, setIsLoading] = useState(true);
 
-	React.useEffect(() => {
+	useEffect(() => {
 		// Charger les actualités
 		fetch('http://localhost:3001/activities', {
 			headers: {

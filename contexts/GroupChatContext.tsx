@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, ReactNode, useState } from 'react';
+import { createContext, useContext, ReactNode, useState } from 'react';
 import type { GroupMessage } from '@/lib/types-advisor';
 
 interface GroupChatState {

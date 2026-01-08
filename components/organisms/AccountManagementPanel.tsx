@@ -691,7 +691,7 @@ export default function AccountManagementPanel() {
                   : 'Enter the amount and reference, then confirm.'}
               </p>
             </div>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setIsTransferModalOpen(false)}>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setIsInternalTransferModalOpen(false)}>
               {t('actions.cancel')}
             </Button>
           </div>

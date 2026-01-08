@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import Link from 'next/link';
 import Card from '@/components/atoms/Card';
 import Badge from '@/components/atoms/Badge';

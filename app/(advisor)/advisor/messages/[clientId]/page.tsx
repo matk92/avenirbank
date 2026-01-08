@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import SectionTitle from '@/components/atoms/SectionTitle';
 import PrivateChatPanel from '@/components/advisor/PrivateChatPanel';
@@ -11,9 +11,9 @@ export default function ClientChatPage() {
 	const params = useParams();
 	const router = useRouter();
 	const clientId = params.clientId as string;
-	const [clientName, setClientName] = React.useState('');
+	const [clientName, setClientName] = useState('');
 
-	React.useEffect(() => {
+	useEffect(() => {
 		fetch(`http://localhost:3001/advisor/clients/${clientId}`, {
 			headers: {
 				Authorization: `Bearer ${localStorage.getItem('token')}`,

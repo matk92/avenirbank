@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
  * Used when clicking on verification link in email
  */
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const apiBase =

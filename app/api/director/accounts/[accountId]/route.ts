@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
 
-export async function DELETE(request: NextRequest, { params }: { params: { accountId: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ accountId: string }> }) {
+  const { accountId } = await params;
   const authHeader = request.headers.get('authorization');
   if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const response = await fetch(`${BACKEND_URL}/director/accounts/${params.accountId}`, {
+    const response = await fetch(`${BACKEND_URL}/director/accounts/${accountId}`, {
       method: 'DELETE',
       headers: { Authorization: authHeader },
     });

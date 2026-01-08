@@ -3,11 +3,6 @@
 import { cloneElement, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 
-type A11yChildProps = {
-  id?: string;
-  'aria-describedby'?: string;
-  'aria-invalid'?: boolean;
-};
 
 type FormFieldProps = {
   label: string;

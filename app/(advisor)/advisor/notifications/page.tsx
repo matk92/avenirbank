@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import { useState, useEffect } from 'react';
 import SectionTitle from '@/components/atoms/SectionTitle';
 import NotificationForm from '@/components/advisor/NotificationForm';
 import Card from '@/components/atoms/Card';
@@ -9,11 +9,11 @@ import { formatDateTime } from '@/lib/format';
 import type { SendNotificationPayload, ClientProfile, Notification } from '@/lib/types-advisor';
 
 export default function SendNotificationPage() {
-	const [clients, setClients] = React.useState<ClientProfile[]>([]);
-	const [recentNotifications, setRecentNotifications] = React.useState<Notification[]>([]);
-	const [successMessage, setSuccessMessage] = React.useState<string>('');
+	const [clients, setClients] = useState<ClientProfile[]>([]);
+	const [recentNotifications, setRecentNotifications] = useState<Notification[]>([]);
+	const [successMessage, setSuccessMessage] = useState<string>('');
 
-	React.useEffect(() => {
+	useEffect(() => {
 		fetch('http://localhost:3001/advisor/clients', {
 			headers: {
 				Authorization: `Bearer ${localStorage.getItem('token')}`,

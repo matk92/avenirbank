@@ -7,7 +7,6 @@ import TransferConversationModal from '@/components/advisor/TransferConversation
 import { useMessaging } from '@/contexts/MessagingContext';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import Card from '@/components/atoms/Card';
 
 export default function ConversationPage() {
 	const params = useParams();

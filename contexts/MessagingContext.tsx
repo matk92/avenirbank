@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
 import { ConversationFull, Message } from '@/lib/types-advisor';
 import { useWebSocket } from '@/lib/websocket-client';
 
