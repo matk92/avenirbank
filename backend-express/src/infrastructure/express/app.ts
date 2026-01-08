@@ -20,6 +20,7 @@ import { RenameAccountUseCase } from '@application/use-cases/accounts/RenameAcco
 import { CloseAccountUseCase } from '@application/use-cases/accounts/CloseAccountUseCase';
 import { AuthRoutes } from '../../interface/routes/authRoutes';
 import { AccountRoutes } from '../../interface/routes/accountRoutes';
+import { SavingsRateRoutes } from '../../interface/routes/savingsRateRoutes';
 import { AuthMiddleware } from '../../interface/middleware/authMiddleware';
 import { errorHandler, notFoundHandler } from '../../interface/middleware/errorHandler';
 
@@ -141,9 +142,12 @@ export class ExpressApp {
       authMiddleware
     );
 
+    const savingsRateRoutes = new SavingsRateRoutes();
+
     // Mount routes
     this.app.use('/auth', authRoutes.getRouter());
     this.app.use('/accounts', accountRoutes.getRouter());
+    this.app.use('/director/savings-rate', authMiddleware.authenticate.bind(authMiddleware), savingsRateRoutes.router);
   }
 
   private setupErrorHandlers(): void {

@@ -19,7 +19,7 @@ import type {
   Stock,
 } from '@/lib/types';
 
-const SAVINGS_DAILY_RATE = 0.0008;
+const DEFAULT_SAVINGS_RATE = 2.5;
 const FLAT_ORDER_FEE = 1;
 const FIXED_BASE_TIMESTAMP = Date.UTC(2024, 4, 12, 9, 30, 0);
 
@@ -99,7 +99,8 @@ type ClientDataAction =
   | { type: 'PREPEND_NOTIFICATION'; payload: { notification: Notification } }
   | { type: 'MARK_NOTIFICATION_READ'; payload: { id: string } }
   | { type: 'APPEND_MESSAGE'; payload: AppendMessagePayload }
-  | { type: 'SET_ADVISOR_TYPING'; payload: { typing: boolean } };
+  | { type: 'SET_ADVISOR_TYPING'; payload: { typing: boolean } }
+  | { type: 'UPDATE_SAVINGS_RATE'; payload: number };
 
 function createAccountRecord(payload: CreateAccountPayload): Account {
   const id = createId('acc');
@@ -334,7 +335,7 @@ function createInitialState(): ClientDataState {
     operations,
     savingsAccount: {
       accountId: savingsAccountRecord.id,
-      dailyRate: SAVINGS_DAILY_RATE,
+      dailyRate: DEFAULT_SAVINGS_RATE / 365,
       lastCapitalization: new Date(baseTimestamp - 1000 * 60 * 60 * 24 * 1).toISOString(),
     },
     investmentOrders,
@@ -342,7 +343,7 @@ function createInitialState(): ClientDataState {
     activity,
     notifications,
     messages,
-    savingsRate: SAVINGS_DAILY_RATE,
+    savingsRate: DEFAULT_SAVINGS_RATE,
     advisorTyping: false,
     advisorName: 'Alexandre Durand',
   };
@@ -357,7 +358,7 @@ function clientDataReducer(state: ClientDataState, action: ClientDataAction): Cl
       if (account.type === 'savings' && !savingsAccount) {
         savingsAccount = {
           accountId: account.id,
-          dailyRate: state.savingsRate,
+          dailyRate: state.savingsRate / 365,
           lastCapitalization: new Date().toISOString(),
         };
       }
@@ -413,7 +414,7 @@ function clientDataReducer(state: ClientDataState, action: ClientDataAction): Cl
       });
       const accountRecord: SavingsAccount = {
         accountId: savingsAccount.id,
-        dailyRate: state.savingsRate,
+        dailyRate: state.savingsRate / 365,
         lastCapitalization: new Date().toISOString(),
       };
       return {
@@ -487,6 +488,9 @@ function clientDataReducer(state: ClientDataState, action: ClientDataAction): Cl
     }
     case 'SET_ADVISOR_TYPING': {
       return { ...state, advisorTyping: action.payload.typing };
+    }
+    case 'UPDATE_SAVINGS_RATE': {
+      return { ...state, savingsRate: action.payload };
     }
     default:
       return state;
@@ -691,6 +695,22 @@ export function ClientDataProvider({ children }: { children: ReactNode }) {
       if (pollInterval) clearInterval(pollInterval);
       cleanupConnection();
     };
+  }, []);
+
+  useEffect(() => {
+    const fetchSavingsRate = async () => {
+      try {
+        const response = await fetch('/api/savings-rate');
+        if (response.ok) {
+          const data = await response.json();
+          const rate = data.rate || 2.5;
+          dispatch({ type: 'UPDATE_SAVINGS_RATE', payload: rate });
+        }
+      } catch (error) {
+        console.error('Error fetching savings rate:', error);
+      }
+    };
+    fetchSavingsRate();
   }, []);
 
   const createAccount = useCallback((payload: CreateAccountPayload) => {

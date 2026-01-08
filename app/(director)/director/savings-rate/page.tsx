@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Card from '@/components/atoms/Card';
 import SavingsRateForm from '@/components/director/SavingsRateForm';
 import { useDirectorData } from '@/contexts/DirectorDataContext';
@@ -10,31 +10,7 @@ import Badge from '@/components/atoms/Badge';
 export default function SavingsRatePage() {
 	const { currentSavingsRate, updateSavingsRate } = useDirectorData();
 	const [history, setHistory] = useState<SavingsRateUpdate[]>([]);
-	const [isLoading, setIsLoading] = useState(true);
-
-	useEffect(() => {
-		const fetchHistory = async () => {
-			try {
-				const token = localStorage.getItem('token');
-				const response = await fetch('/api/director/savings-rate/history', {
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				});
-
-				if (response.ok) {
-					const data = await response.json();
-					setHistory(data);
-				}
-			} catch (error) {
-				console.error('Error fetching history:', error);
-			} finally {
-				setIsLoading(false);
-			}
-		};
-
-		fetchHistory();
-	}, []);
+	const [isLoading] = useState(false);
 
 	const handleSubmit = async (newRate: number) => {
 		try {
@@ -45,16 +21,27 @@ export default function SavingsRatePage() {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${token}`,
 				},
-				body: JSON.stringify({ newRate }),
+				body: JSON.stringify({ rate: newRate }),
 			});
 
 			if (!response.ok) {
-				throw new Error('Erreur lors de la modification du taux');
+				const errorData = await response.json();
+				throw new Error(errorData.message || 'Erreur lors de la modification du taux');
 			}
 
-			const update = await response.json();
+			const result = await response.json();
 			updateSavingsRate(newRate);
-			setHistory((prev) => [update, ...prev]);
+			
+			if (result.data) {
+				const update = {
+					oldRate: currentSavingsRate,
+					newRate: result.data.rate,
+					updatedAt: new Date(result.data.createdAt),
+					updatedBy: result.data.setBy || 'Director',
+					affectedAccounts: 0
+				};
+				setHistory((prev) => [update, ...prev]);
+			}
 		} catch (error) {
 			console.error('Error updating savings rate:', error);
 			throw error;

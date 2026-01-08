@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { BankAccount, Stock, DirectorStats } from '@/lib/types-director';
 
 interface DirectorDataState {
@@ -38,6 +38,23 @@ export function DirectorDataProvider({ children }: { children: ReactNode }) {
     currentSavingsRate: 2.5,
   });
   const [currentSavingsRate, setCurrentSavingsRate] = useState(2.5);
+
+  useEffect(() => {
+    const fetchSavingsRate = async () => {
+      try {
+        const response = await fetch('/api/savings-rate');
+        if (response.ok) {
+          const data = await response.json();
+          const rate = data.rate || 2.5;
+          setCurrentSavingsRate(rate);
+          setStats(prev => ({ ...prev, currentSavingsRate: rate }));
+        }
+      } catch (error) {
+        console.error('Error fetching savings rate:', error);
+      }
+    };
+    fetchSavingsRate();
+  }, []);
 
   const updateSavingsRate = (newRate: number) => {
     setCurrentSavingsRate(newRate);

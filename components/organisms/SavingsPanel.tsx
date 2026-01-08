@@ -89,15 +89,18 @@ export default function SavingsPanel() {
                 <div className="rounded-2xl bg-emerald-50/60 p-4 dark:bg-emerald-900/30">
                   <p className="text-sm text-emerald-700 dark:text-emerald-300">{t('savings.currentRate')}</p>
                   <p className="text-2xl font-semibold text-emerald-900 dark:text-emerald-200">
-                    {t('savings.ratePerDay', { value: (state.savingsRate * 100).toFixed(2) })}
+                    {state.savingsRate.toFixed(2)}% / an
+                  </p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                    {((state.savingsRate / 365) * 100).toFixed(4)}% / jour
                   </p>
                 </div>
-                <div className="rounded-2xl bg-emerald-50/40 p-4">
-                  <p className="text-sm text-emerald-700">{t('savings.projection')}</p>
-                  <p className="text-2xl font-semibold text-emerald-900">
+                <div className="rounded-2xl bg-emerald-50/40 p-4 dark:bg-emerald-900/30">
+                  <p className="text-sm text-emerald-700 dark:text-emerald-300">{t('savings.projection')}</p>
+                  <p className="text-2xl font-semibold text-emerald-900 dark:text-emerald-200">
                     {formatCurrency(projection.projectedBalance, language)}
                   </p>
-                  <p className="text-xs text-emerald-700">+{formatCurrency(projection.accruedInterest, language)} / 30 j</p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">+{formatCurrency(projection.accruedInterest, language)} / 30 j</p>
                 </div>
               </div>
             </div>
