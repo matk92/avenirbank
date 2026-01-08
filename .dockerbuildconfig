@@ -1,0 +1,11 @@
+# Docker Build Configuration
+# This file contains build-time CPU and memory limits
+
+# Limit parallel build jobs to reduce CPU load
+export DOCKER_BUILDKIT_PARALLEL_JOBS=2
+
+# Set build memory limit
+export DOCKER_BUILDKIT_MEMORY_LIMIT=2G
+
+# Limit build CPU usage (percentage)
+export DOCKER_BUILDKIT_CPU_LIMIT=50

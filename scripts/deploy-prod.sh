@@ -32,10 +32,16 @@ mkdir -p postgres/init
 mkdir -p monitoring
 mkdir -p redis
 
-echo "Building and starting production services..."
+echo "Building and starting production services with CPU limits..."
 
-# Build and start all services with the specified command
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+# Source build configuration to limit CPU usage
+if [ -f .dockerbuildconfig ]; then
+    source .dockerbuildconfig
+fi
+
+# Build with CPU and memory limits to reduce system load
+DOCKER_BUILDKIT=1 docker compose --env-file .env.prod -f docker-compose.prod.yml build --parallel --progress=plain --memory 2g
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 
 echo "Waiting for services to be ready..."
 sleep 15
