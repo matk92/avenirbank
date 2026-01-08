@@ -15,19 +15,27 @@ export default function ActivitiesListPage() {
 	const [isLoading, setIsLoading] = useState(true);
 
 	useEffect(() => {
-		// Charger les actualités
-		fetch('http://localhost:3001/activities', {
+		const token = localStorage.getItem('token');
+		fetch('/api/advisor/activities', {
 			headers: {
-				Authorization: `Bearer ${localStorage.getItem('token')}`,
+				Authorization: `Bearer ${token}`,
 			},
 		})
-			.then((res) => res.json())
+			.then(async (res) => {
+				if (!res.ok) {
+					const text = await res.text().catch(() => '');
+					throw new Error(text || 'Erreur lors du chargement des actualités');
+				}
+				return res.json();
+			})
 			.then((data) => {
 				setActivities(data);
-				setIsLoading(false);
 			})
 			.catch((error) => {
 				console.error('Erreur lors du chargement:', error);
+				setActivities([]);
+			})
+			.finally(() => {
 				setIsLoading(false);
 			});
 	}, []);

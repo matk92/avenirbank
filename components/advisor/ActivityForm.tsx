@@ -21,6 +21,7 @@ interface ActivityFormProps {
 
 export default function ActivityForm({ onSubmit }: ActivityFormProps) {
 	const [isSubmitting, setIsSubmitting] = React.useState(false);
+	const [submitError, setSubmitError] = React.useState<string>('');
 
 	const form = useForm<ActivityFormValues>({
 		resolver: zodResolver(activitySchema),
@@ -32,10 +33,13 @@ export default function ActivityForm({ onSubmit }: ActivityFormProps) {
 
 	const handleSubmit = async (values: ActivityFormValues) => {
 		setIsSubmitting(true);
+		setSubmitError('');
 		try {
 			await onSubmit(values);
 			form.reset();
 		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Erreur lors de la création';
+			setSubmitError(message);
 			console.error('Erreur lors de la création:', error);
 		} finally {
 			setIsSubmitting(false);
@@ -80,6 +84,10 @@ export default function ActivityForm({ onSubmit }: ActivityFormProps) {
 				<Button type="submit" disabled={isSubmitting}>
 					{isSubmitting ? 'Publication en cours...' : "Publier l'actualité"}
 				</Button>
+
+				{submitError && (
+					<p className="text-sm text-red-500">{submitError}</p>
+				)}
 			</form>
 		</Card>
 	);

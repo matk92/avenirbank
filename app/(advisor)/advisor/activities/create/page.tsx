@@ -9,17 +9,19 @@ export default function CreateActivityPage() {
 	const router = useRouter();
 
 	const handleCreateActivity = async (data: CreateActivityPayload) => {
-		const response = await fetch('http://localhost:3001/advisor/activities', {
+		const token = localStorage.getItem('token');
+		const response = await fetch('/api/advisor/activities', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				Authorization: `Bearer ${localStorage.getItem('token')}`,
+				Authorization: `Bearer ${token}`,
 			},
 			body: JSON.stringify(data),
 		});
 
 		if (!response.ok) {
-			throw new Error("Erreur lors de la création de l'actualité");
+			const text = await response.text().catch(() => '');
+			throw new Error(text || "Erreur lors de la création de l'actualité");
 		}
 		router.push('/advisor/activities');
 	};
