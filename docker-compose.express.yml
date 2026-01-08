@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Express Backend with MongoDB
+  backend-express:
+    build:
+      context: ./backend-express
+      dockerfile: Dockerfile
+    container_name: avenirbank-backend-express
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - MONGODB_URI=mongodb://mongodb:27017/avenirbank
+      - JWT_SECRET=dev-jwt-secret-express
+      - JWT_EXPIRES_IN=24h
+      - FRONTEND_URL=http://localhost:3000
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=100
+    depends_on:
+      - mongodb
+      - mailpit
+    volumes:
+      - ./backend-express:/app
+      - /app/node_modules
+    command: sh -c "npm install && npm run seed && npm run dev"
+    networks:
+      - avenirbank-express
+
+  # MongoDB Database
+  mongodb:
+    image: mongo:7
+    container_name: avenirbank-mongodb
+    environment:
+      - MONGO_INITDB_DATABASE=avenirbank
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./backend-express/src/infrastructure/database/mongodb/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - avenirbank-express
+
+  # Mailpit - Email testing service (shared)
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: avenirbank-mailpit-express
+    ports:
+      - "1025:1025" # SMTP port
+      - "8025:8025" # Web UI port
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    networks:
+      - avenirbank-express
+
+volumes:
+  mongodb_data:
+
+networks:
+  avenirbank-express:
+    driver: bridge

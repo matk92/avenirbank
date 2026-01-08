@@ -32,12 +32,24 @@ export async function POST(request: Request) {
     return NextResponse.json(payload ?? { message: 'Login failed' }, { status: upstream.status });
   }
 
-  const token = payload?.access_token;
+  // Handle both NestJS format (flat) and Express format (nested in data)
+  const token = payload?.access_token || payload?.data?.access_token;
+  const user = payload?.user || payload?.data?.user;
+  const role = payload?.role || payload?.data?.user?.role;
+  
   if (!token) {
+    console.log('Token missing in response:', payload);
     return NextResponse.json({ message: 'Token manquant dans la réponse' }, { status: 502 });
   }
 
-  const response = NextResponse.json(payload, { status: 200 });
+  // Return in the format expected by the frontend
+  const responseData = {
+    access_token: token,
+    user: user,
+    role: role
+  };
+
+  const response = NextResponse.json(responseData, { status: 200 });
   response.cookies.set('token', String(token), {
     httpOnly: true,
     sameSite: 'lax',
@@ -47,8 +59,8 @@ export async function POST(request: Request) {
   });
   
   // Store role in cookie for middleware access
-  if (payload?.role) {
-    response.cookies.set('userRole', String(payload.role), {
+  if (role) {
+    response.cookies.set('userRole', String(role), {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',

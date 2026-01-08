@@ -43,7 +43,8 @@ next-env.d.ts
 components.json
 .vscode
 
-
+backend-express/node_modules
+test-script/
 adam.txt
 sujet/
 
