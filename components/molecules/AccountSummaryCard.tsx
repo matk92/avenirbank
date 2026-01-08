@@ -1,6 +1,9 @@
+ 'use client';
+
 import type { ReactNode } from 'react';
 import Card from '@/components/atoms/Card';
 import Badge from '@/components/atoms/Badge';
+import { useI18n } from '@/contexts/I18nContext';
 
 export type AccountSummaryCardProps = {
   name: string;
@@ -12,6 +15,7 @@ export type AccountSummaryCardProps = {
 };
 
 export default function AccountSummaryCard({ name, iban, balance, statusLabel, statusTone = 'success', actions }: AccountSummaryCardProps) {
+  const { t } = useI18n();
   return (
     <Card className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
@@ -23,7 +27,7 @@ export default function AccountSummaryCard({ name, iban, balance, statusLabel, s
       </div>
       <div className="flex items-end justify-between gap-3">
         <div>
-          <p className="text-sm text-white/60">Solde</p>
+          <p className="text-sm text-white/60">{t('accounts.balance')}</p>
           <p className="text-2xl font-semibold text-white">{balance}</p>
         </div>
         {actions ? <div className="flex items-center gap-2">{actions}</div> : null}

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
+import { FETCH_TAGS } from '@/lib/fetch';
 
 function apiBase() {
   return process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -16,6 +18,9 @@ export async function DELETE(request: Request, ctx: Ctx) {
     cache: 'no-store',
   });
   const payload = await upstream.json().catch(() => null);
+  if (upstream.ok) {
+    revalidateTag(FETCH_TAGS.stocks);
+  }
   return NextResponse.json(payload ?? { ok: true }, { status: upstream.status });
 }
 

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://avenirbank.example.com"),
+  metadataBase: new URL("https://avenirbank.com"),
   title: {
     default: "Avenir Bank | Banque digitale responsable",
     template: "%s | Avenir Bank",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title: "Avenir Bank",
     description:
       "Application bancaire moderne pour suivre vos comptes, votre épargne et vos investissements.",
-    url: "https://avenirbank.example.com",
+    url: "https://avenirbank.com",
     siteName: "Avenir Bank",
     locale: "fr_FR",
     type: "website",

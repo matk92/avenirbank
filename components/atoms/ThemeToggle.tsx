@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
+import { useI18n } from '@/contexts/I18nContext';
 
 type Theme = 'light' | 'dark';
 
@@ -40,6 +41,7 @@ function applyTheme(theme: Theme) {
 }
 
 export default function ThemeToggle() {
+  const { t } = useI18n();
   const [theme, setTheme] = useState<Theme>('dark');
   const [resolved, setResolved] = useState(false);
 
@@ -93,8 +95,8 @@ export default function ThemeToggle() {
     });
   }, []);
 
-  const label = theme === 'light' ? 'Activer le mode sombre' : 'Activer le mode clair';
-  const title = theme === 'light' ? 'Mode sombre' : 'Mode clair';
+  const label = theme === 'light' ? t('theme.label.enableDark') : t('theme.label.enableLight');
+  const title = theme === 'light' ? t('theme.title.dark') : t('theme.title.light');
   const icon = theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />;
 
   return (

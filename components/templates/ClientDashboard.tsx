@@ -57,7 +57,7 @@ export default function ClientDashboard() {
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
                 <p className="text-xs uppercase tracking-[0.4em] text-white/50">{t('dashboard.accountsSection')}</p>
                 <p className="mt-2 text-3xl font-semibold text-white">{state.accounts.length}</p>
-                <p className="text-sm text-white/60">{language === 'fr' ? 'Comptes actifs' : 'Active accounts'}</p>
+                <p className="text-sm text-white/60">{t('dashboard.accountsActiveLabel')}</p>
               </div>
             </div>
             <div>
@@ -80,11 +80,11 @@ export default function ClientDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.4em] text-white/50">{t('dashboard.activityFeed')}</p>
-              <h3 className="text-lg font-semibold text-white">{language === 'fr' ? 'Derniers highlights' : 'Latest highlights'}</h3>
+              <h3 className="text-lg font-semibold text-white">{t('dashboard.highlightsTitle')}</h3>
             </div>
             <div className="rounded-2xl border border-white/10 px-3 py-1 text-xs text-white/70">
               <Bell className="mr-1 inline h-4 w-4" />
-              {unreadNotifications} unread
+              {t('dashboard.notifications.unread', { count: unreadNotifications })}
             </div>
           </div>
           {recentActivity.length === 0 ? (
@@ -118,10 +118,10 @@ export default function ClientDashboard() {
           value={String(state.accounts.length)}
           icon={<Wallet className="h-5 w-5" />}
           trend="neutral"
-          trendValue={language === 'fr' ? 'stable' : 'steady'}
+          trendValue={t('dashboard.trend.stable')}
         />
         <Stat
-          label="Notifications"
+          label={t('dashboard.notifications.title')}
           value={String(unreadNotifications)}
           icon={<Bell className="h-5 w-5" />}
           trend={unreadNotifications > 0 ? 'up' : 'neutral'}
@@ -131,7 +131,7 @@ export default function ClientDashboard() {
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <Card hover>
-          <SectionTitle title={language === 'fr' ? 'Comptes mis en avant' : 'Featured accounts'} />
+          <SectionTitle title={t('dashboard.featuredAccountsTitle')} />
           <div className="grid gap-4 md:grid-cols-2">
             {highlightedAccounts.map((account) => (
               <div key={account.id} className="rounded-3xl border border-white/10 bg-white/5 p-4">
@@ -149,16 +149,14 @@ export default function ClientDashboard() {
         </Card>
 
         <Card hover className="space-y-5">
-          <SectionTitle title={language === 'fr' ? 'Messages rapides' : 'Quick messaging'} />
+          <SectionTitle title={t('dashboard.quickMessagingTitle')} />
           <p className="text-sm text-white/70">
-            {language === 'fr'
-              ? 'Votre conseiller répond souvent en moins de 5 minutes. Laissez-lui un message.'
-              : 'Your advisor usually replies within minutes. Leave them a note.'}
+            {t('dashboard.quickMessagingHelp')}
           </p>
           <Button asChild>
             <Link href="/client/messages" className="gap-2">
               <Plus className="h-4 w-4" />
-              {language === 'fr' ? 'Nouveau message' : 'New message'}
+              {t('dashboard.newMessage')}
             </Link>
           </Button>
         </Card>

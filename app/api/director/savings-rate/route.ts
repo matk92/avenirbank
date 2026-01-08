@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { FETCH_TAGS } from '@/lib/fetch';
+import { revalidateTag } from 'next/cache';
 
 const BACKEND_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -19,7 +21,11 @@ export async function GET() {
         'Authorization': authHeader,
         'Content-Type': 'application/json',
       },
-      cache: 'no-store',
+      next: {
+        // Stable-ish config: allow short caching.
+        revalidate: 60,
+        tags: [FETCH_TAGS.savingsRate],
+      },
     });
 
     const data = await response.json();
@@ -57,6 +63,9 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await response.json();
+    if (response.ok) {
+      revalidateTag(FETCH_TAGS.savingsRate);
+    }
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.error('Error setting savings rate:', error);

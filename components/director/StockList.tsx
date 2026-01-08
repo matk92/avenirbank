@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Card from '@/components/atoms/Card';
 import Badge from '@/components/atoms/Badge';
 import Button from '@/components/atoms/Button';
+import { useI18n } from '@/contexts/I18nContext';
 import { Stock } from '@/lib/types-director';
 import { TrendingUp, Users, Eye, EyeOff, Trash2 } from 'lucide-react';
 
@@ -14,6 +15,7 @@ interface StockListProps {
 }
 
 export default function StockList({ stocks, onToggleAvailability, onDelete }: StockListProps) {
+  const { t } = useI18n();
   const [loadingStockId, setLoadingStockId] = useState<string | null>(null);
 
   const handleToggle = async (stockId: string, currentAvailability: boolean) => {
@@ -26,7 +28,7 @@ export default function StockList({ stocks, onToggleAvailability, onDelete }: St
   };
 
   const handleDelete = async (stockId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cette action ?')) return;
+    if (!confirm(t('director.stocks.confirmDelete'))) return;
     
     setLoadingStockId(stockId);
     try {
@@ -41,8 +43,8 @@ export default function StockList({ stocks, onToggleAvailability, onDelete }: St
       <Card className="text-center">
         <div className="py-12">
           <TrendingUp className="mx-auto mb-4 h-12 w-12 text-zinc-600" />
-          <h3 className="mb-2 text-lg font-semibold text-white">Aucune action</h3>
-          <p className="text-sm text-zinc-400">Créez votre première action pour commencer</p>
+          <h3 className="mb-2 text-lg font-semibold text-white">{t('director.stocks.emptyTitle')}</h3>
+          <p className="text-sm text-zinc-400">{t('director.stocks.emptySubtitle')}</p>
         </div>
       </Card>
     );
@@ -54,7 +56,7 @@ export default function StockList({ stocks, onToggleAvailability, onDelete }: St
         <Card key={stock.id} hover className="relative">
           <div className="mb-3">
             <Badge tone={stock.isAvailable ? 'success' : 'neutral'}>
-              {stock.isAvailable ? 'Disponible' : 'Indisponible'}
+              {stock.isAvailable ? t('director.stocks.available') : t('director.stocks.unavailable')}
             </Badge>
           </div>
 
@@ -73,12 +75,12 @@ export default function StockList({ stocks, onToggleAvailability, onDelete }: St
             <Users className="h-4 w-4 text-zinc-400" />
             <span className="text-sm text-zinc-300">
               <span className="font-semibold text-white">{stock.ownedByClients}</span>{' '}
-              {stock.ownedByClients > 1 ? 'clients propriétaires' : 'client propriétaire'}
+              {stock.ownedByClients > 1 ? t('director.stocks.ownerPlural') : t('director.stocks.ownerSingle')}
             </span>
           </div>
 
           <p className="mb-4 text-xs text-zinc-500">
-            Le cours de l'action est géré automatiquement
+            {t('director.stocks.priceManaged')}
           </p>
 
           <div className="flex gap-2">
@@ -92,12 +94,12 @@ export default function StockList({ stocks, onToggleAvailability, onDelete }: St
               {stock.isAvailable ? (
                 <>
                   <EyeOff className="h-4 w-4" />
-                  Masquer
+                  {t('director.stocks.hide')}
                 </>
               ) : (
                 <>
                   <Eye className="h-4 w-4" />
-                  Afficher
+                  {t('director.stocks.show')}
                 </>
               )}
             </Button>
@@ -108,8 +110,8 @@ export default function StockList({ stocks, onToggleAvailability, onDelete }: St
               disabled={loadingStockId === stock.id || stock.ownedByClients > 0}
               title={
                 stock.ownedByClients > 0
-                  ? 'Impossible de supprimer : des clients possèdent cette action'
-                  : 'Supprimer l\'action'
+                  ? t('director.stocks.deleteDisabledOwned')
+                  : t('director.stocks.delete')
               }
             >
               <Trash2 className="h-4 w-4" />
@@ -118,7 +120,7 @@ export default function StockList({ stocks, onToggleAvailability, onDelete }: St
 
           {stock.ownedByClients > 0 && (
             <p className="mt-2 text-xs text-zinc-500">
-            Suppression impossible : des clients possèdent cette action
+            {t('director.stocks.deleteDisabledOwned')}
             </p>
           )}
         </Card>

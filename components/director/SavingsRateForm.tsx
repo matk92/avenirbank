@@ -8,9 +8,10 @@ import Button from '@/components/atoms/Button';
 import Card from '@/components/atoms/Card';
 import Input from '@/components/atoms/Input';
 import Modal from '@/components/molecules/Modal';
+import { useI18n } from '@/contexts/I18nContext';
 
 const savingsRateSchema = z.object({
-  newRate: z.number().min(0, 'Le taux doit être positif').max(10, 'Le taux ne peut pas dépasser 10%'),
+  newRate: z.number().min(0, 'director.savingsRate.error.positive').max(10, 'director.savingsRate.error.max10'),
 });
 
 type SavingsRateFormData = z.infer<typeof savingsRateSchema>;
@@ -21,6 +22,7 @@ interface SavingsRateFormProps {
 }
 
 export default function SavingsRateForm({ currentRate, onSubmit }: SavingsRateFormProps) {
+  const { t } = useI18n();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -58,7 +60,7 @@ export default function SavingsRateForm({ currentRate, onSubmit }: SavingsRateFo
       reset({ newRate: pendingRate });
       setTimeout(() => setSuccess(false), 5000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
+      setError(err instanceof Error ? err.message : t('auth.error.generic'));
     } finally {
       setIsSubmitting(false);
       setPendingRate(null);
@@ -73,15 +75,15 @@ export default function SavingsRateForm({ currentRate, onSubmit }: SavingsRateFo
   return (
     <>
       <Card className="max-w-xl">
-        <h2 className="mb-6 text-2xl font-bold text-white">Modifier le taux d'épargne</h2>
+        <h2 className="mb-6 text-2xl font-bold text-white">{t('director.savingsRate.title')}</h2>
 
         <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
           <p className="text-sm text-amber-300">
-            <span className="font-semibold">Taux actuel :</span>{' '}
+            <span className="font-semibold">{t('director.savingsRate.currentRateLabel')} :</span>{' '}
             <span className="text-2xl font-bold text-amber-400">{currentRate.toFixed(2)}%</span>
           </p>
           <p className="mt-2 text-xs text-amber-200/80">
-            Tous les clients ayant un compte épargne seront notifiés du changement.
+            {t('director.savingsRate.currentRateNotice')}
           </p>
         </div>
 
@@ -89,7 +91,7 @@ export default function SavingsRateForm({ currentRate, onSubmit }: SavingsRateFo
           {/* Nouveau taux */}
           <div>
             <label htmlFor="newRate" className="mb-2 block text-sm font-medium text-zinc-300">
-              Nouveau taux d'épargne (%)
+              {t('director.savingsRate.newRateLabel')}
             </label>
             <Input
               id="newRate"
@@ -100,12 +102,14 @@ export default function SavingsRateForm({ currentRate, onSubmit }: SavingsRateFo
               {...register('newRate', { valueAsNumber: true })}
             />
             {errors.newRate && (
-              <p className="mt-1 text-sm text-[#ff4f70]">{errors.newRate.message}</p>
+              <p className="mt-1 text-sm text-[#ff4f70]">
+                {t((errors.newRate.message ?? 'auth.error.generic') as never)}
+              </p>
             )}
           </div>
           {success && (
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">
-              ✓ Taux d'épargne modifié avec succès ! Tous les clients concernés ont été notifiés.
+              {t('director.savingsRate.success')}
             </div>
           )}
 
@@ -121,7 +125,7 @@ export default function SavingsRateForm({ currentRate, onSubmit }: SavingsRateFo
             className="w-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 shadow-[0_15px_35px_rgba(245,158,11,0.35)]"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Modification en cours...' : 'Modifier le taux'}
+            {isSubmitting ? t('director.savingsRate.submitting') : t('director.savingsRate.submit')}
           </Button>
         </form>
       </Card>
@@ -130,32 +134,32 @@ export default function SavingsRateForm({ currentRate, onSubmit }: SavingsRateFo
         <Modal
           open={showConfirmModal}
           onClose={handleCancel}
-          title="Confirmer la modification"
+          title={t('director.savingsRate.modal.title')}
         >
           <div className="space-y-4">
             <p className="text-zinc-300">
-              Êtes-vous sûr de vouloir modifier le taux d'épargne de{' '}
-              <span className="font-semibold text-white">{currentRate.toFixed(2)}%</span> à{' '}
-              <span className="font-semibold text-amber-400">{pendingRate.toFixed(2)}%</span> ?
+              {t('director.savingsRate.modal.question', {
+                current: currentRate.toFixed(2),
+                next: pendingRate.toFixed(2),
+              })}
             </p>
 
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
               <p className="text-sm text-amber-300">
-                 Tous les clients ayant un compte épargne recevront une notification en temps
-                réel de ce changement.
+                {t('director.savingsRate.modal.notice')}
               </p>
             </div>
 
             <div className="flex gap-3">
               <Button variant="secondary" onClick={handleCancel} className="flex-1">
-                Annuler
+                {t('director.savingsRate.modal.cancel')}
               </Button>
               <Button
                 variant="primary"
                 onClick={handleConfirm}
                 className="flex-1 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 shadow-[0_15px_35px_rgba(245,158,11,0.35)]"
               >
-                Confirmer
+                {t('director.savingsRate.modal.confirm')}
               </Button>
             </div>
           </div>

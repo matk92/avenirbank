@@ -5,6 +5,7 @@ import Card from '@/components/atoms/Card';
 import Input from '@/components/atoms/Input';
 import Button from '@/components/atoms/Button';
 import Badge from '@/components/atoms/Badge';
+import { useI18n } from '@/contexts/I18nContext';
 import { DirectorClient } from '@/lib/types-director';
 import { Search, User, Edit, Ban, Trash2 } from 'lucide-react';
 
@@ -14,6 +15,7 @@ interface ClientDirectoryProps {
 }
 
 export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryProps) {
+  const { t } = useI18n();
   const [search, setSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState<DirectorClient | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -66,14 +68,14 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err?.message || err?.error || 'Erreur');
+        throw new Error(err?.message || err?.error || t('auth.error.generic'));
       }
 
-      setSuccess('Client modifié');
+      setSuccess(t('director.clientsDirectory.success.updated'));
       await onRefresh();
       setIsEditing(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur inconnue');
+      setError(e instanceof Error ? e.message : t('auth.error.generic'));
     } finally {
       setLoading(false);
     }
@@ -82,7 +84,7 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
   const handleBan = async () => {
     if (!selectedClient) return;
     const willBan = !selectedClient.isBanned;
-    if (!confirm(willBan ? 'Bannir ce client ?' : 'Débannir ce client ?')) return;
+    if (!confirm(willBan ? t('director.clientsDirectory.confirm.ban') : t('director.clientsDirectory.confirm.unban'))) return;
 
     setError(null);
     setSuccess(null);
@@ -100,13 +102,13 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err?.message || err?.error || 'Erreur');
+        throw new Error(err?.message || err?.error || t('auth.error.generic'));
       }
 
-      setSuccess(willBan ? 'Client banni' : 'Client débanni');
+      setSuccess(willBan ? t('director.clientsDirectory.success.banned') : t('director.clientsDirectory.success.unbanned'));
       await onRefresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur inconnue');
+      setError(e instanceof Error ? e.message : t('auth.error.generic'));
     } finally {
       setLoading(false);
     }
@@ -114,7 +116,7 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
 
   const handleDelete = async () => {
     if (!selectedClient) return;
-    if (!confirm('Supprimer ce client ? (uniquement si aucun compte)')) return;
+    if (!confirm(t('director.clientsDirectory.confirm.delete'))) return;
 
     setError(null);
     setSuccess(null);
@@ -129,14 +131,14 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
 
       if (response.status !== 204) {
         const err = await response.json();
-        throw new Error(err?.message || err?.error || 'Erreur');
+        throw new Error(err?.message || err?.error || t('auth.error.generic'));
       }
 
-      setSuccess('Client supprimé');
+      setSuccess(t('director.clientsDirectory.success.deleted'));
       setSelectedClient(null);
       await onRefresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur inconnue');
+      setError(e instanceof Error ? e.message : t('auth.error.generic'));
     } finally {
       setLoading(false);
     }
@@ -147,13 +149,13 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <Card>
-        <h2 className="mb-4 text-xl font-bold text-white">Annuaire clients ({clients.length})</h2>
+        <h2 className="mb-4 text-xl font-bold text-white">{t('director.clientsDirectory.title', { count: clients.length })}</h2>
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un client..."
+            placeholder={t('director.clientsDirectory.searchPlaceholder')}
             className="pl-10"
           />
         </div>
@@ -162,8 +164,8 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
           {filteredClients.length === 0 ? (
             <div className="py-8 text-center text-zinc-400">
               {clients.length === 0 
-                ? 'Aucun client enregistré. Créez un client pour commencer.' 
-                : 'Aucun client ne correspond à votre recherche'}
+                ? t('director.clientsDirectory.empty.noClients')
+                : t('director.clientsDirectory.empty.noResults')}
             </div>
           ) : (
             filteredClients.map((client) => (
@@ -185,8 +187,8 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
                       <p className="font-semibold">
                         {client.firstName} {client.lastName}
                       </p>
-                      {client.isBanned && <Badge tone="warning">Banni</Badge>}
-                      {!client.isEmailConfirmed && <Badge tone="neutral">Non vérifié</Badge>}
+                      {client.isBanned && <Badge tone="warning">{t('director.clientsDirectory.badge.banned')}</Badge>}
+                      {!client.isEmailConfirmed && <Badge tone="neutral">{t('director.clientsDirectory.badge.unverified')}</Badge>}
                     </div>
                     <p className="text-xs text-zinc-400">{client.email}</p>
                   </div>
@@ -201,7 +203,7 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
         {!selectedClient ? (
           <div className="py-16 text-center">
             <User className="mx-auto mb-4 h-12 w-12 text-zinc-600" />
-            <p className="text-zinc-400">Sélectionnez un client dans l&apos;annuaire</p>
+            <p className="text-zinc-400">{t('director.clientsDirectory.selectHint')}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -214,9 +216,9 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
               </div>
               <div className="flex gap-2">
                 {selectedClient.isBanned ? (
-                  <Badge tone="warning">Banni</Badge>
+                  <Badge tone="warning">{t('director.clientsDirectory.badge.banned')}</Badge>
                 ) : (
-                  <Badge tone="success">Actif</Badge>
+                  <Badge tone="success">{t('director.clientsDirectory.badge.active')}</Badge>
                 )}
               </div>
             </div>
@@ -226,35 +228,35 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-zinc-300">
-                      Prénom
+                      {t('auth.firstName.label')}
                     </label>
                     <Input
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="Jean"
+                      placeholder={t('auth.firstName.placeholder')}
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-zinc-300">Nom</label>
+                    <label className="mb-2 block text-sm font-medium text-zinc-300">{t('auth.lastName.label')}</label>
                     <Input
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Dupont"
+                      placeholder={t('auth.lastName.placeholder')}
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-zinc-300">Email</label>
+                  <label className="mb-2 block text-sm font-medium text-zinc-300">{t('auth.email.label')}</label>
                   <Input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="jean@example.com"
+                    placeholder={t('director.clientsDirectory.emailPlaceholder')}
                   />
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-zinc-300">
-                    Nouveau mot de passe (optionnel)
+                    {t('director.clientsDirectory.passwordLabel')}
                   </label>
                   <Input
                     type="password"
@@ -265,10 +267,10 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
                 </div>
                 <div className="flex gap-2">
                   <Button variant="primary" onClick={handleEdit} disabled={loading}>
-                    {loading ? 'Enregistrement...' : 'Enregistrer'}
+                    {loading ? t('director.clientsDirectory.actions.saving') : t('director.clientsDirectory.actions.save')}
                   </Button>
                   <Button variant="ghost" onClick={() => setIsEditing(false)}>
-                    Annuler
+                    {t('director.clientsDirectory.actions.cancel')}
                   </Button>
                 </div>
               </div>
@@ -277,7 +279,7 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
                 <div className="flex gap-2">
                   <Button variant="secondary" onClick={() => setIsEditing(true)}>
                     <Edit className="mr-2 h-4 w-4" />
-                    Modifier
+                    {t('director.clientsDirectory.actions.edit')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -286,7 +288,7 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
                     className="text-[#ff4f70] hover:text-[#ff4f70]"
                   >
                     <Ban className="mr-2 h-4 w-4" />
-                    {selectedClient.isBanned ? 'Débannir' : 'Bannir'}
+                    {selectedClient.isBanned ? t('director.clientsDirectory.actions.unban') : t('director.clientsDirectory.actions.ban')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -295,7 +297,7 @@ export default function ClientDirectory({ clients, onRefresh }: ClientDirectoryP
                     className="text-[#ff4f70] hover:text-[#ff4f70]"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Supprimer
+                    {t('director.clientsDirectory.actions.delete')}
                   </Button>
                 </div>
               </div>
