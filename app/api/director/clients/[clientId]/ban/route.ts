@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
+import { FETCH_TAGS } from '@/lib/fetch';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
 
@@ -12,9 +14,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const response = await fetch(`${BACKEND_URL}/director/clients/${clientId}/ban`, {
       method: 'PATCH',
       headers: { Authorization: authHeader },
+      cache: 'no-store',
     });
 
     const data = await response.json();
+		if (response.ok) {
+			revalidateTag(FETCH_TAGS.directorClients);
+		}
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.error('Error proxying request:', error);

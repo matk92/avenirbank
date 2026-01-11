@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { FETCH_TAGS } from '@/lib/fetch';
+import { revalidateTag } from 'next/cache';
 
 const BACKEND_URL = process.env.INTERNAL_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 
@@ -15,7 +17,10 @@ export async function GET(request: NextRequest) {
       headers: {
         Authorization: authHeader,
       },
-      cache: 'no-store',
+      next: {
+        revalidate: 60,
+        tags: [FETCH_TAGS.activity],
+      },
     });
 
     const contentType = response.headers.get('content-type') || '';
@@ -53,6 +58,9 @@ export async function POST(request: NextRequest) {
     const data = contentType.includes('application/json')
       ? await response.json()
       : await response.text();
+    if (response.ok) {
+      revalidateTag(FETCH_TAGS.activity);
+    }
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.error('Error proxying request:', error);

@@ -185,7 +185,7 @@ export default function MessagingPanel() {
         <SectionTitle title={t('messages.title')} subtitle={t('messages.subtitle')} />
         <Card>
           <div className="flex h-96 items-center justify-center">
-            <p className="text-zinc-400">Chargement...</p>
+				<p className="text-zinc-400">{t('form.loading')}</p>
           </div>
         </Card>
       </div>
@@ -202,12 +202,12 @@ export default function MessagingPanel() {
               className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`}
             />
             <span className="text-xs text-zinc-400">
-              {isConnected ? 'Connecté' : 'Déconnecté'}
+							{isConnected ? t('messages.status.connected') : t('messages.status.disconnected')}
             </span>
           </div>
           {conversation?.advisorName && (
             <span className="text-xs text-zinc-400">
-              Conseiller: {conversation.advisorName}
+						{t('messages.advisorLabel')}: {conversation.advisorName}
             </span>
           )}
         </div>
@@ -215,7 +215,7 @@ export default function MessagingPanel() {
         <div className="flex max-h-96 flex-col gap-4 overflow-y-auto pr-2">
           {messages.length === 0 ? (
             <div className="flex h-48 items-center justify-center text-zinc-400">
-              Aucun message pour le moment. Envoyez votre premier message !
+						{t('messages.empty')}
             </div>
           ) : (
             messages.map((message) => (
@@ -237,7 +237,7 @@ export default function MessagingPanel() {
                 </span>
                 {message.senderId === currentUserId && (
                   <span className="mt-0.5 text-[11px] text-zinc-500">
-                    {message.read ? 'Lu' : 'Envoyé'}
+								{message.read ? t('messages.delivery.read') : t('messages.delivery.sent')}
                   </span>
                 )}
               </div>

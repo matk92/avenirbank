@@ -10,22 +10,23 @@ import Input from '@/components/atoms/Input';
 import Select from '@/components/atoms/Select';
 import CreditCalculator from './CreditCalculator';
 import { ClientProfile } from '@/lib/types-advisor';
+import { useI18n } from '@/contexts/I18nContext';
 
 const creditSchema = z.object({
-  clientId: z.string().min(1, 'Veuillez sélectionner un client'),
-  amount: z.number({ required_error: 'Montant requis' }).min(1, 'Le montant doit être supérieur à 0'),
+  clientId: z.string().min(1, 'advisor.creditForm.error.clientRequired'),
+  amount: z.number({ required_error: 'advisor.creditForm.error.amountRequired' }).min(1, 'advisor.creditForm.error.amountMin'),
   annualInterestRate: z
-    .number({ required_error: 'Taux requis' })
-    .min(0, 'Le taux doit être positif')
-    .max(20, 'Le taux ne peut pas dépasser 20%'),
+    .number({ required_error: 'advisor.creditForm.error.annualRateRequired' })
+    .min(0, 'advisor.creditForm.error.ratePositive')
+    .max(20, 'advisor.creditForm.error.annualRateMax20'),
   insuranceRate: z
-    .number({ required_error: 'Taux d\'assurance requis' })
-    .min(0, 'Le taux doit être positif')
-    .max(5, 'Le taux d\'assurance ne peut pas dépasser 5%'),
+    .number({ required_error: 'advisor.creditForm.error.insuranceRateRequired' })
+    .min(0, 'advisor.creditForm.error.ratePositive')
+    .max(5, 'advisor.creditForm.error.insuranceRateMax5'),
   durationMonths: z
-    .number({ required_error: 'Durée requise' })
-    .min(12, 'Durée minimale: 12 mois')
-    .max(360, 'Durée maximale: 360 mois'),
+    .number({ required_error: 'advisor.creditForm.error.durationRequired' })
+    .min(12, 'advisor.creditForm.error.durationMin12')
+    .max(360, 'advisor.creditForm.error.durationMax360'),
 });
 
 type CreditFormData = z.infer<typeof creditSchema>;
@@ -36,6 +37,7 @@ interface CreditFormProps {
 }
 
 export default function CreditForm({ clients, onSubmit }: CreditFormProps) {
+  const { t } = useI18n();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -72,7 +74,7 @@ export default function CreditForm({ clients, onSubmit }: CreditFormProps) {
       reset();
       setTimeout(() => setSuccess(false), 5000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
+      setError(err instanceof Error ? err.message : t('auth.error.generic'));
     } finally {
       setIsSubmitting(false);
     }
@@ -82,15 +84,15 @@ export default function CreditForm({ clients, onSubmit }: CreditFormProps) {
     <div className="grid gap-6 lg:grid-cols-2">
       <div>
         <Card>
-          <h2 className="mb-6 text-2xl font-bold text-white">Nouveau crédit</h2>
+          <h2 className="mb-6 text-2xl font-bold text-white">{t('advisor.creditForm.title')}</h2>
 
           <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
             <div>
               <label htmlFor="clientId" className="mb-2 block text-sm font-medium text-zinc-300">
-                Client
+                {t('advisor.creditForm.client.label')}
               </label>
               <Select id="clientId" hasError={!!errors.clientId} {...register('clientId')}>
-                <option value="">Sélectionnez un client</option>
+                <option value="">{t('advisor.creditForm.client.placeholder')}</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.firstName} {client.lastName} ({client.email})
@@ -98,13 +100,15 @@ export default function CreditForm({ clients, onSubmit }: CreditFormProps) {
                 ))}
               </Select>
               {errors.clientId && (
-                <p className="mt-1 text-sm text-[#ff4f70]">{errors.clientId.message}</p>
+                <p className="mt-1 text-sm text-[#ff4f70]">
+                  {t((errors.clientId.message ?? 'auth.error.generic') as never)}
+                </p>
               )}
             </div>
 
             <div>
               <label htmlFor="amount" className="mb-2 block text-sm font-medium text-zinc-300">
-                Montant du crédit (€)
+                {t('advisor.creditForm.amount.label')}
               </label>
               <Input
                 id="amount"
@@ -115,7 +119,9 @@ export default function CreditForm({ clients, onSubmit }: CreditFormProps) {
                 {...register('amount', { valueAsNumber: true })}
               />
               {errors.amount && (
-                <p className="mt-1 text-sm text-[#ff4f70]">{errors.amount.message}</p>
+                <p className="mt-1 text-sm text-[#ff4f70]">
+                  {t((errors.amount.message ?? 'auth.error.generic') as never)}
+                </p>
               )}
             </div>
 
@@ -124,7 +130,7 @@ export default function CreditForm({ clients, onSubmit }: CreditFormProps) {
                 htmlFor="annualInterestRate"
                 className="mb-2 block text-sm font-medium text-zinc-300"
               >
-                Taux d'intérêt annuel (%)
+                {t('advisor.creditForm.annualRate.label')}
               </label>
               <Input
                 id="annualInterestRate"
@@ -135,12 +141,14 @@ export default function CreditForm({ clients, onSubmit }: CreditFormProps) {
                 {...register('annualInterestRate', { valueAsNumber: true })}
               />
               {errors.annualInterestRate && (
-                <p className="mt-1 text-sm text-[#ff4f70]">{errors.annualInterestRate.message}</p>
+                <p className="mt-1 text-sm text-[#ff4f70]">
+                  {t((errors.annualInterestRate.message ?? 'auth.error.generic') as never)}
+                </p>
               )}
             </div>
             <div>
               <label htmlFor="insuranceRate" className="mb-2 block text-sm font-medium text-zinc-300">
-                Taux d'assurance (%)
+                {t('advisor.creditForm.insuranceRate.label')}
               </label>
               <Input
                 id="insuranceRate"
@@ -151,16 +159,18 @@ export default function CreditForm({ clients, onSubmit }: CreditFormProps) {
                 {...register('insuranceRate', { valueAsNumber: true })}
               />
               {errors.insuranceRate && (
-                <p className="mt-1 text-sm text-[#ff4f70]">{errors.insuranceRate.message}</p>
+                <p className="mt-1 text-sm text-[#ff4f70]">
+                  {t((errors.insuranceRate.message ?? 'auth.error.generic') as never)}
+                </p>
               )}
               <p className="mt-1 text-xs text-zinc-500">
-                L'assurance est calculée sur le montant total et prélevée mensuellement
+                {t('advisor.creditForm.insuranceRate.help')}
               </p>
             </div>
 
             <div>
               <label htmlFor="durationMonths" className="mb-2 block text-sm font-medium text-zinc-300">
-                Durée (mois)
+                {t('advisor.creditForm.duration.label')}
               </label>
               <Input
                 id="durationMonths"
@@ -171,14 +181,16 @@ export default function CreditForm({ clients, onSubmit }: CreditFormProps) {
                 {...register('durationMonths', { valueAsNumber: true })}
               />
               {errors.durationMonths && (
-                <p className="mt-1 text-sm text-[#ff4f70]">{errors.durationMonths.message}</p>
+                <p className="mt-1 text-sm text-[#ff4f70]">
+                  {t((errors.durationMonths.message ?? 'auth.error.generic') as never)}
+                </p>
               )}
               <p className="mt-1 text-xs text-zinc-500">Entre 12 et 360 mois</p>
             </div>
 
             {success && (
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">
-                ✓ Crédit octroyé avec succès !
+                {t('advisor.creditForm.success')}
               </div>
             )}
 
@@ -189,7 +201,7 @@ export default function CreditForm({ clients, onSubmit }: CreditFormProps) {
             )}
 
             <Button type="submit" variant="primary" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? 'Traitement...' : 'Octroyer le crédit'}
+              {isSubmitting ? t('advisor.creditForm.submitting') : t('advisor.creditForm.submit')}
             </Button>
           </form>
         </Card>

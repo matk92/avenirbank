@@ -8,6 +8,8 @@ export const FETCH_TAGS = {
   stocks: 'stocks',
   savingsRate: 'savings-rate',
   activity: 'activity',
+  directorClients: 'director-clients',
+  directorAccounts: 'director-accounts',
   user: (id: string) => `user:${id}`,
 };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -18,10 +18,46 @@ import { getAccounts, createAccount, depositMoney, transferMoney, transferToClie
 import type { Language, TranslationKey } from '@/lib/i18n';
 import type { Account } from '@/lib/types';
 
+function coerceNumberOrUndefined(value: unknown) {
+  if (typeof value === 'number') {
+    return Number.isNaN(value) ? undefined : value;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const normalized = trimmed.replace(',', '.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return value;
+}
+
+const numberNonNegativeSchema = z.preprocess(
+  coerceNumberOrUndefined,
+  z
+    .number({
+      required_error: 'form.error.required',
+      invalid_type_error: 'form.error.required',
+    })
+    .min(0, 'form.error.required'),
+);
+
+const amountPositiveSchema = z.preprocess(
+  coerceNumberOrUndefined,
+  z
+    .number({
+      required_error: 'form.error.required',
+      invalid_type_error: 'form.error.required',
+    })
+    .gt(0, 'form.error.required'),
+);
+
 const createAccountSchema = z.object({
   name: z.string().min(1, 'form.error.required'),
   type: z.enum(['checking', 'savings']),
-  initialDeposit: z.coerce.number().min(0, 'form.error.required'),
+  initialDeposit: numberNonNegativeSchema,
 });
 
 const renameAccountSchema = z.object({
@@ -32,7 +68,7 @@ const internalTransferSchema = z
   .object({
     fromAccountId: z.string().min(1, 'form.error.required'),
     toAccountId: z.string().min(1, 'accounts.transfer.error.destinationRequired'),
-    amount: z.coerce.number().gt(0, 'form.error.required'),
+    amount: amountPositiveSchema,
     reference: z.string().min(1, 'form.error.required'),
   })
   .refine((data) => data.fromAccountId !== data.toAccountId, {
@@ -43,12 +79,12 @@ const internalTransferSchema = z
 const externalTransferSchema = z.object({
   fromAccountId: z.string().min(1, 'form.error.required'),
   recipientEmail: z.string().email('accounts.transfer.error.email'),
-  amount: z.coerce.number().gt(0, 'form.error.required'),
+  amount: amountPositiveSchema,
   reference: z.string().min(1, 'form.error.required'),
 });
 
 const depositSchema = z.object({
-  amount: z.coerce.number().gt(0, 'form.error.required'),
+  amount: amountPositiveSchema,
 });
 
 type CreateAccountFormValues = z.infer<typeof createAccountSchema>;
@@ -84,7 +120,6 @@ export default function AccountManagementPanel() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
-  const [dragSourceAccountId, setDragSourceAccountId] = useState<string | null>(null);
   const [dragOverAccountId, setDragOverAccountId] = useState<string | null>(null);
   const [isInternalTransferModalOpen, setIsInternalTransferModalOpen] = useState(false);
   const [isExternalTransferModalOpen, setIsExternalTransferModalOpen] = useState(false);
@@ -105,6 +140,12 @@ export default function AccountManagementPanel() {
 
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const accountsListRef = useRef<HTMLDivElement | null>(null);
+  const dragSourceAccountIdRef = useRef<string | null>(null);
+
+  const resetDragState = () => {
+    dragSourceAccountIdRef.current = null;
+    setDragOverAccountId(null);
+  };
 
   const getCurrentUserIdentityFromToken = () => {
     try {
@@ -127,11 +168,14 @@ export default function AccountManagementPanel() {
     }
   };
 
-  const isSelfUser = (u: MessagingUser) => {
-    if (currentUserId && u.id === currentUserId) return true;
-    if (currentUserEmail && u.email?.toLowerCase() === currentUserEmail.toLowerCase()) return true;
-    return false;
-  };
+  const isSelfUser = useCallback(
+    (u: MessagingUser) => {
+      if (currentUserId && u.id === currentUserId) return true;
+      if (currentUserEmail && u.email?.toLowerCase() === currentUserEmail.toLowerCase()) return true;
+      return false;
+    },
+    [currentUserId, currentUserEmail],
+  );
 
   const showFeedback = (key: TranslationKey) => {
     setFeedback(t(key));
@@ -230,14 +274,14 @@ export default function AccountManagementPanel() {
         const accountsData = await getAccounts();
         setAccounts(accountsData);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load accounts');
+        setError(err instanceof Error ? err.message : t('accounts.error.loadAccounts'));
       } finally {
         setLoading(false);
       }
     }
 
     loadAccounts();
-  }, []);
+  }, [t]);
 
   // Reset transfer form when accounts change to ensure dropdowns are populated
   useEffect(() => {
@@ -316,35 +360,35 @@ export default function AccountManagementPanel() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [isExternalTransferModalOpen, watchedExternalRecipientEmail]);
+  }, [isExternalTransferModalOpen, watchedExternalRecipientEmail, recipientSuggestionsEnabled, isSelfUser]);
 
   const formatTransferError = (err: unknown) => {
     const raw = err instanceof Error ? err.message : String(err);
     const msg = raw.trim();
 
-    if (!msg) return language === 'fr' ? 'Erreur inconnue.' : 'Unknown error.';
+    if (!msg) return t('accounts.transfer.error.unknown');
 
     // Normalize a few known backend messages for the external transfer use case.
     if (msg.toLowerCase().includes('insufficient funds')) {
-      return language === 'fr' ? 'Solde insuffisant sur le compte source.' : 'Insufficient funds in the source account.';
+      return t('accounts.transfer.error.insufficientFunds');
     }
     if (msg.toLowerCase().includes('recipient not found')) {
-      return language === 'fr' ? 'Bénéficiaire introuvable.' : 'Recipient not found.';
+      return t('accounts.transfer.error.recipientNotFound');
     }
     if (msg.toLowerCase().includes('cannot transfer to yourself')) {
-      return language === 'fr' ? 'Impossible de faire un virement vers vous-même.' : 'Cannot transfer to yourself.';
+      return t('accounts.transfer.error.cannotTransferToYourself');
     }
     if (msg.toLowerCase().includes('recipient has no active account')) {
-      return language === 'fr' ? 'Le bénéficiaire n’a pas de compte actif.' : 'Recipient has no active account.';
+      return t('accounts.transfer.error.recipientNoActive');
     }
     if (msg.toLowerCase().includes('source account not found')) {
-      return language === 'fr' ? 'Compte source introuvable.' : 'Source account not found.';
+      return t('accounts.transfer.error.sourceNotFound');
     }
     if (msg.toLowerCase().includes('source account is not active')) {
-      return language === 'fr' ? 'Le compte source est fermé.' : 'Source account is not active.';
+      return t('accounts.transfer.error.sourceNotActive');
     }
     if (msg.toLowerCase().includes('transfer amount')) {
-      return language === 'fr' ? `Montant invalide : ${msg}` : `Invalid amount: ${msg}`;
+      return t('accounts.transfer.error.invalidAmount', { msg });
     }
 
     return msg;
@@ -377,7 +421,7 @@ export default function AccountManagementPanel() {
       
       createAccountForm.reset();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create account');
+      setError(err instanceof Error ? err.message : t('accounts.error.createAccount'));
     }
   });
 
@@ -397,7 +441,7 @@ export default function AccountManagementPanel() {
       setEditingAccountId(null);
       renameForm.reset();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to rename account');
+      setError(err instanceof Error ? err.message : t('accounts.error.renameAccount'));
     }
   });
 
@@ -423,12 +467,10 @@ export default function AccountManagementPanel() {
       setIsInternalTransferModalOpen(false);
       showFeedback('feedback.transferCompleted');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to transfer money';
+      const errorMessage = err instanceof Error ? err.message : t('accounts.error.transfer');
       
       if (errorMessage.startsWith('INSUFFICIENT_FUNDS:')) {
-        const msg = language === 'fr'
-          ? 'Solde insuffisant sur le compte source.'
-          : 'Insufficient funds: The source account does not have enough balance for this transfer.';
+			const msg = t('accounts.transfer.error.insufficientFunds');
         setInternalTransferError(msg);
         setError(msg);
       } else {
@@ -479,32 +521,45 @@ export default function AccountManagementPanel() {
       setIsDepositModalOpen(false);
       setSelectedAccountForDeposit(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to deposit money');
+      setError(err instanceof Error ? err.message : t('accounts.error.deposit'));
     }
   });
 
   const handleDragStart = (accountId: string) => (event: React.DragEvent<HTMLDivElement>) => {
-    setDragSourceAccountId(accountId);
+    dragSourceAccountIdRef.current = accountId;
+    event.dataTransfer.clearData();
+    event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', accountId);
+    event.dataTransfer.setData('application/x-account-id', accountId);
+  };
+
+  const handleDragEnd = () => {
+    resetDragState();
   };
 
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    // Improve cross-browser drop reliability.
+    event.dataTransfer.dropEffect = 'move';
   };
 
   const handleDrop = (targetAccountId: string) => (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    const sourceId = event.dataTransfer.getData('text/plain') || dragSourceAccountId;
-    if (!sourceId || sourceId === targetAccountId) {
-      return;
-    }
+    const sourceId =
+      event.dataTransfer.getData('text/plain') ||
+      event.dataTransfer.getData('application/x-account-id') ||
+      dragSourceAccountIdRef.current;
+
+    // Always reset drag state, even on invalid drops.
+    resetDragState();
+
+    if (!sourceId || sourceId === targetAccountId) return;
+
     internalTransferForm.setValue('fromAccountId', sourceId);
     internalTransferForm.setValue('toAccountId', targetAccountId);
     internalTransferForm.setValue('amount', 0);
     internalTransferForm.setValue('reference', '');
     setIsInternalTransferModalOpen(true);
-    setDragSourceAccountId(null);
-    setDragOverAccountId(null);
     // Focus amount after the modal renders.
     setTimeout(() => internalTransferForm.setFocus('amount'), 0);
   };
@@ -548,7 +603,7 @@ export default function AccountManagementPanel() {
         await closeAccount(accountId);
         setAccounts(prev => prev.filter(acc => acc.id !== accountId));
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to close account');
+        setError(err instanceof Error ? err.message : t('accounts.error.closeAccount'));
       }
     }
   };
@@ -568,7 +623,7 @@ export default function AccountManagementPanel() {
       setAccountToClose(null);
       setSelectedTransferTarget(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to close account');
+      setError(err instanceof Error ? err.message : t('accounts.error.closeAccount'));
     }
   };
 
@@ -577,7 +632,7 @@ export default function AccountManagementPanel() {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading accounts...</p>
+          <p className="text-gray-600 dark:text-gray-400">{t('accounts.loadingAccounts')}</p>
         </div>
       </div>
     );
@@ -590,7 +645,7 @@ export default function AccountManagementPanel() {
           <Card className="border-white/10 bg-white/5">
             <div className="flex items-start justify-between gap-4" role="status" aria-live="polite">
               <div>
-                <p className="text-xs uppercase tracking-[0.4em] text-white/60">{language === 'fr' ? 'Succès' : 'Success'}</p>
+                <p className="text-xs uppercase tracking-[0.4em] text-white/60">{t('status.success')}</p>
                 <p className="mt-1 text-sm text-white/80">{feedback}</p>
               </div>
               <Button type="button" variant="ghost" size="sm" onClick={() => setFeedback(null)}>
@@ -610,14 +665,14 @@ export default function AccountManagementPanel() {
               </svg>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{t('status.error')}</h3>
               <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             </div>
             <button
               onClick={() => setError(null)}
               className="ml-auto flex-shrink-0 text-red-400 hover:text-red-600"
             >
-              <span className="sr-only">Dismiss</span>
+              <span className="sr-only">{t('actions.dismiss')}</span>
               <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
@@ -628,17 +683,15 @@ export default function AccountManagementPanel() {
 
       <Modal
         open={isDepositModalOpen}
-        title="Deposit Money"
+        title={t('accounts.depositTitle')}
         onClose={() => setIsDepositModalOpen(false)}
       >
         <Card className="border-white/15 bg-black/70 p-6">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.4em] text-white/60">Deposit Money</p>
+              <p className="text-xs uppercase tracking-[0.4em] text-white/60">{t('accounts.depositTitle')}</p>
               <p className="mt-1 text-sm text-white/70">
-                {language === 'fr'
-                  ? 'Renseignez le montant à déposer.'
-                  : 'Enter the amount to deposit.'}
+                {t('accounts.deposit.help')}
               </p>
             </div>
             <Button type="button" variant="ghost" size="sm" onClick={() => setIsDepositModalOpen(false)}>
@@ -647,7 +700,7 @@ export default function AccountManagementPanel() {
           </div>
 
           <form onSubmit={handleDeposit} className="grid gap-5">
-            <FormField label="Amount" htmlFor="deposit-amount">
+            <FormField label={t('accounts.transfer.amount')} htmlFor="deposit-amount">
               <Input
                 id="deposit-amount"
                 type="number"
@@ -670,7 +723,7 @@ export default function AccountManagementPanel() {
               <Button type="button" variant="secondary" onClick={() => setIsDepositModalOpen(false)}>
                 {t('actions.cancel')}
               </Button>
-              <Button type="submit">Deposit</Button>
+              <Button type="submit">{t('accounts.deposit')}</Button>
             </div>
           </form>
         </Card>
@@ -686,9 +739,7 @@ export default function AccountManagementPanel() {
             <div>
               <p className="text-xs uppercase tracking-[0.4em] text-white/60">{t('accounts.transferTitle')}</p>
               <p className="mt-1 text-sm text-white/70">
-                {language === 'fr'
-                  ? 'Renseignez le montant et le libellé, puis validez.'
-                  : 'Enter the amount and reference, then confirm.'}
+                {t('accounts.transfer.help')}
               </p>
             </div>
             <Button type="button" variant="ghost" size="sm" onClick={() => setIsInternalTransferModalOpen(false)}>
@@ -700,7 +751,7 @@ export default function AccountManagementPanel() {
             <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{language === 'fr' ? 'Erreur' : 'Error'}</h3>
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{t('status.error')}</h3>
                   <p className="text-sm text-red-700 dark:text-red-300">{internalTransferError}</p>
                 </div>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setInternalTransferError(null)}>
@@ -781,7 +832,7 @@ export default function AccountManagementPanel() {
             <FormField label={t('accounts.transfer.reference')} htmlFor="transfer-modal-reference">
               <Input
                 id="transfer-modal-reference"
-                placeholder={language === 'fr' ? 'Libellé' : 'Reference'}
+                placeholder={t('accounts.transfer.referencePlaceholder')}
                 {...internalTransferForm.register('reference')}
                 hasError={Boolean(internalTransferForm.formState.errors.reference)}
               />
@@ -806,19 +857,17 @@ export default function AccountManagementPanel() {
 
       <Modal
         open={isExternalTransferModalOpen}
-        title={language === 'fr' ? 'Virement vers un client' : 'Transfer to a client'}
+        title={t('accounts.transfer.externalTitle')}
         onClose={() => setIsExternalTransferModalOpen(false)}
       >
         <Card className="border-white/15 bg-black/70 p-6">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.4em] text-white/60">
-                {language === 'fr' ? 'Virement externe' : 'External transfer'}
+                {t('accounts.transfer.externalLabel')}
               </p>
               <p className="mt-1 text-sm text-white/70">
-                {language === 'fr'
-                  ? 'Envoyez de l’argent vers le compte principal d’un autre client.'
-                  : "Send money to another client's main account."}
+                {t('accounts.transfer.externalHelp')}
               </p>
             </div>
             <Button type="button" variant="ghost" size="sm" onClick={() => setIsExternalTransferModalOpen(false)}>
@@ -830,7 +879,7 @@ export default function AccountManagementPanel() {
             <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{language === 'fr' ? 'Erreur' : 'Error'}</h3>
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{t('status.error')}</h3>
                   <p className="text-sm text-red-700 dark:text-red-300">{externalTransferError}</p>
                 </div>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setExternalTransferError(null)}>
@@ -873,7 +922,7 @@ export default function AccountManagementPanel() {
                   <Input
                     id="external-transfer-recipient-email"
                     type="email"
-                    placeholder={language === 'fr' ? 'email@exemple.com' : 'email@example.com'}
+                    placeholder={t('accounts.transfer.recipientEmailPlaceholder')}
                     {...register}
                     onChange={(e) => {
                       register.onChange(e);
@@ -895,9 +944,7 @@ export default function AccountManagementPanel() {
 
               <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-white/60">
-                  {language === 'fr'
-                    ? 'Tapez pour rechercher, ou affichez la liste des clients.'
-                    : 'Type to search, or show the client list.'}
+                  {t('accounts.transfer.searchHelp')}
                 </p>
                 <Button
                   type="button"
@@ -914,27 +961,23 @@ export default function AccountManagementPanel() {
                   }}
                 >
                   {isBrowsingClients
-                    ? language === 'fr'
-                      ? 'Masquer la liste'
-                      : 'Hide list'
-                    : language === 'fr'
-                      ? 'Voir les clients'
-                      : 'Show clients'}
+                    ? t('accounts.transfer.hideList')
+                    : t('accounts.transfer.showClients')}
                 </Button>
               </div>
 
               {isSearchingRecipient ? (
-                <p className="text-xs text-white/60">{language === 'fr' ? 'Recherche…' : 'Searching…'}</p>
+                <p className="text-xs text-white/60">{t('accounts.transfer.searching')}</p>
               ) : null}
 
               {isLoadingBrowseClients ? (
-                <p className="text-xs text-white/60">{language === 'fr' ? 'Chargement des clients…' : 'Loading clients…'}</p>
+                <p className="text-xs text-white/60">{t('accounts.transfer.loadingClients')}</p>
               ) : null}
 
               {recipientSuggestions.length > 0 ? (
                 <div className="rounded-xl border border-white/10 bg-white/5 p-2">
                   <p className="mb-2 text-xs text-white/60">
-                    {language === 'fr' ? 'Suggestions (depuis Messages)' : 'Suggestions (from Messages)'}
+                    {t('accounts.transfer.suggestionsFromMessages')}
                   </p>
                   <div className="space-y-1">
                     {recipientSuggestions.map((u) => (
@@ -963,7 +1006,7 @@ export default function AccountManagementPanel() {
               {isBrowsingClients && browseClients.length > 0 ? (
                 <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-2">
                   <p className="mb-2 text-xs text-white/60">
-                    {language === 'fr' ? 'Clients' : 'Clients'}
+                    {t('accounts.transfer.clients')}
                   </p>
                   <div className="max-h-56 space-y-1 overflow-auto">
                     {browseClients.slice(0, 20).map((u) => (
@@ -988,9 +1031,7 @@ export default function AccountManagementPanel() {
                   </div>
                   {browseClients.length > 20 ? (
                     <p className="mt-2 text-xs text-white/60">
-                      {language === 'fr'
-                        ? 'Affichage limité à 20 clients. Utilisez la recherche pour trouver plus vite.'
-                        : 'Showing first 20 clients. Use search to find more.'}
+                      {t('accounts.transfer.clientsLimited')}
                     </p>
                   ) : null}
                 </div>
@@ -1017,7 +1058,7 @@ export default function AccountManagementPanel() {
             <FormField label={t('accounts.transfer.reference')} htmlFor="external-transfer-reference">
               <Input
                 id="external-transfer-reference"
-                placeholder={language === 'fr' ? 'Libellé' : 'Reference'}
+                placeholder={t('accounts.transfer.referencePlaceholder')}
                 {...externalTransferForm.register('reference')}
                 hasError={Boolean(externalTransferForm.formState.errors.reference)}
               />
@@ -1044,15 +1085,11 @@ export default function AccountManagementPanel() {
         <Card className="w-full max-w-md">
           <div className="flex items-start justify-between gap-4 mb-6">
             <div>
-              <p className="text-xs uppercase tracking-[0.4em] text-white/60">Close Account</p>
+              <p className="text-xs uppercase tracking-[0.4em] text-white/60">{t('accounts.close.title')}</p>
               <p className="mt-1 text-sm text-white/70">
                 {accountToClose && accountToClose.balance > 0
-                  ? language === 'fr'
-                    ? `Ce compte contient ${formatCurrency(accountToClose.balance)}. Veuillez sélectionner un compte de destination pour le solde.`
-                    : `This account contains ${formatCurrency(accountToClose.balance)}. Please select a target account for the balance.`
-                  : language === 'fr'
-                  ? 'Êtes-vous sûr de vouloir fermer ce compte ?'
-                  : 'Are you sure you want to close this account?'}
+                  ? t('accounts.close.confirmWithBalance', { balance: formatCurrency(accountToClose.balance) })
+                  : t('accounts.close.confirmNoBalance')}
               </p>
             </div>
             <Button type="button" variant="ghost" size="sm" onClick={() => setIsCloseModalOpen(false)}>
@@ -1067,7 +1104,7 @@ export default function AccountManagementPanel() {
                 value={selectedTransferTarget || ''}
                 onChange={(e) => setSelectedTransferTarget(e.target.value)}
               >
-                <option value="">{language === 'fr' ? 'Sélectionner un compte' : 'Select an account'}</option>
+                <option value="">{t('accounts.close.selectAccountPlaceholder')}</option>
                 {accounts
                   .filter(acc => acc.id !== accountToClose.id && acc.status === 'active')
                   .map((account) => (
@@ -1089,7 +1126,7 @@ export default function AccountManagementPanel() {
               onClick={confirmCloseAccount}
               disabled={accountToClose !== null && accountToClose.balance > 0 && !selectedTransferTarget}
             >
-              {language === 'fr' ? 'Fermer le compte' : 'Close Account'}
+              {t('accounts.close.submit')}
             </Button>
           </div>
         </Card>
@@ -1152,9 +1189,7 @@ export default function AccountManagementPanel() {
                 </Button>
                 {lastCreatedAccountId ? (
                   <p className="mt-3 text-xs text-white/60">
-                    {language === 'fr'
-                      ? 'Le compte a été créé. La liste a été mise à jour.'
-                      : 'Account created. The list has been refreshed.'}
+                    {t('accounts.createdHint')}
                   </p>
                 ) : null}
               </div>
@@ -1165,15 +1200,11 @@ export default function AccountManagementPanel() {
           <SectionTitle title={t('accounts.transferTitle')} />
           <Card>
             <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
-              {language === 'fr'
-                ? 'Astuce : glissez un compte sur un autre pour pré-remplir le virement.'
-                : 'Tip: drag one account onto another to prefill the transfer.'}
+              {t('accounts.transfer.tipDrag')}
             </p>
             <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {language === 'fr'
-                  ? 'Virement vers un autre client : utilisez le bouton ci-dessous.'
-                  : 'Transfer to another client: use the button below.'}
+                {t('accounts.transfer.tipExternal')}
               </p>
               <Button
                 type="button"
@@ -1185,7 +1216,7 @@ export default function AccountManagementPanel() {
                   setTimeout(() => externalTransferForm.setFocus('recipientEmail'), 0);
                 }}
               >
-                {language === 'fr' ? 'Virement vers un client' : 'Transfer to a client'}
+                {t('accounts.transfer.externalTitle')}
               </Button>
             </div>
 
@@ -1259,7 +1290,7 @@ export default function AccountManagementPanel() {
               <FormField label={t('accounts.transfer.reference')} htmlFor="transfer-reference">
                 <Input
                   id="transfer-reference"
-                  placeholder="Référence"
+                  placeholder={t('accounts.transfer.reference')}
                   {...internalTransferForm.register('reference')}
                   hasError={Boolean(internalTransferForm.formState.errors.reference)}
                 />
@@ -1292,6 +1323,7 @@ export default function AccountManagementPanel() {
               }`}
               draggable
               onDragStart={handleDragStart(account.id)}
+              onDragEnd={handleDragEnd}
               onDragOver={handleDragOver}
               onDragEnter={handleDragEnter(account.id)}
               onDragLeave={handleDragLeave}
@@ -1307,7 +1339,7 @@ export default function AccountManagementPanel() {
                   account.status === 'active' ? (
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="sm" onClick={() => openDepositModal(account.id)}>
-                        Deposit
+                        {t('accounts.deposit')}
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => beginRename(account)}>
                         {t('accounts.rename')}

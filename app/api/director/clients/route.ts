@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
+import { FETCH_TAGS } from '@/lib/fetch';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
 
@@ -9,6 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     const response = await fetch(`${BACKEND_URL}/director/clients`, {
       headers: { Authorization: authHeader },
+      next: { revalidate: 60, tags: [FETCH_TAGS.directorClients] },
     });
 
     const data = await response.json();
@@ -32,9 +35,13 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      cache: 'no-store',
     });
 
     const data = await response.json();
+		if (response.ok) {
+			revalidateTag(FETCH_TAGS.directorClients);
+		}
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.error('Error proxying request:', error);

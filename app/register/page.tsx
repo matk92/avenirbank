@@ -67,7 +67,7 @@ export default function RegisterPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Registration failed');
+        throw new Error(errorData.message || t('auth.register.error.failed'));
       }
 
       await response.json();
@@ -78,7 +78,7 @@ export default function RegisterPage() {
         window.location.href = '/login';
       }, 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('auth.error.generic'));
     } finally {
       setIsLoading(false);
     }
@@ -176,7 +176,7 @@ export default function RegisterPage() {
             </div>
             <div className="md:col-span-2">
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Loading...' : t('auth.register.cta')}
+                {isLoading ? t('form.loading') : t('auth.register.cta')}
               </Button>
             </div>
           </form>

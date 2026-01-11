@@ -168,20 +168,6 @@ Si besoin, vous pouvez relancer manuellement:
 docker exec avenirbank-backend npm run seed
 ```
 
-### Bonus Web Push (notifications admin → navigateur)
-
-Le projet supporte les notifications Web Push (Service Worker + Push API + VAPID). Quand un conseiller/directeur envoie une notification à un client (endpoint `POST /advisor/notifications`), le backend tente aussi d'envoyer une notification push au navigateur du client (si celui-ci a autorisé les notifications).
-
-- Service Worker: `public/push-sw.js`
-- Abonnement enregistré côté client dans: `app/(client)/client/ClientShell.tsx`
-- Endpoints backend: `GET /push/vapid-public-key`, `POST /push/subscribe`
-
-Pour activer réellement le push, il faut définir les variables d'environnement VAPID sur le backend:
-
-- `VAPID_PUBLIC_KEY`
-- `VAPID_PRIVATE_KEY`
-- `VAPID_SUBJECT` (ex: `mailto:dev@avenirbank.local`)
-
 Génération rapide (dans `backend/`):
 
 ```bash

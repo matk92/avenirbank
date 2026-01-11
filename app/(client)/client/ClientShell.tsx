@@ -12,7 +12,7 @@ import { useMessaging } from '@/contexts/MessagingContext';
 import { useClientData } from '@/contexts/ClientDataContext';
 import type { TranslationKey } from '@/lib/i18n';
 import { logout } from '@/lib/logout';
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 const navItems: { href: string; labelKey: TranslationKey; icon: LucideIcon }[] = [
@@ -73,21 +73,27 @@ async function ensurePushSubscription() {
 export default function ClientShell({ children }: { children: ReactNode }) {
 	const pathname = usePathname();
 	const router = useRouter();
-	const { t, language } = useI18n();
+	const { t } = useI18n();
 	const { unreadTotal } = useMessaging();
 	const { state } = useClientData();
 
-	const normalizeText = (value: string) =>
-		value
-			.normalize('NFD')
-			.replace(/[\u0300-\u036f]/g, '')
-			.replace(/\u2019/g, "'")
-			.toLowerCase();
+	const normalizeText = useCallback(
+		(value: string) =>
+			value
+				.normalize('NFD')
+				.replace(/[\u0300-\u036f]/g, '')
+				.replace(/\u2019/g, "'")
+				.toLowerCase(),
+		[],
+	);
 
-	const isSavingsRateNotification = (message: string) => {
-		const normalized = normalizeText(message);
-		return normalized.includes('taux') && normalized.includes('epargne');
-	};
+	const isSavingsRateNotification = useCallback(
+		(message: string) => {
+			const normalized = normalizeText(message);
+			return normalized.includes('taux') && normalized.includes('epargne');
+		},
+		[normalizeText],
+	);
 
 	const unreadSavingsRateNotifications = useMemo(
 		() =>
@@ -96,7 +102,7 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 					!notification.read &&
 					isSavingsRateNotification(notification.message),
 			).length,
-		[state.notifications],
+		[state.notifications, isSavingsRateNotification],
 	);
 
 	useEffect(() => {
@@ -214,7 +220,7 @@ export default function ClientShell({ children }: { children: ReactNode }) {
 				</main>
 
 				<footer className="pb-6 text-center text-xs text-white/50">
-					© {new Date().getFullYear()} Avenir Bank — {language === 'fr' ? 'Tous droits réservés' : 'All rights reserved'}
+					© {new Date().getFullYear()} Avenir Bank — {t('footer.rightsReserved')}
 				</footer>
 			</div>
 		</div>

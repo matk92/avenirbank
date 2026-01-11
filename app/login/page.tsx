@@ -53,12 +53,12 @@ export default function LoginPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Login failed');
+        throw new Error(errorData.message || t('auth.login.error.failed'));
       }
 
       const data = await response.json();
       if (!data?.access_token) {
-        throw new Error('Token manquant dans la réponse');
+        throw new Error(t('auth.login.error.missingToken'));
       }
 
       // Store in localStorage for client-side access
@@ -82,7 +82,7 @@ export default function LoginPage() {
         }
       }, 1000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : t('auth.error.generic'));
     } finally {
       setIsLoading(false);
     }
@@ -151,7 +151,7 @@ export default function LoginPage() {
 
             <Button type="submit" className="w-full" disabled={isLoading}>
               <LogIn className="h-4 w-4" />
-              {isLoading ? 'Loading...' : t('auth.login.cta')}
+              {isLoading ? t('form.loading') : t('auth.login.cta')}
             </Button>
           </form>
           {success ? (
